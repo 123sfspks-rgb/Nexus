@@ -1,95 +1,178 @@
-const { Terminal } = window;
-const { FitAddon } = window;
-let term = null;
-let fit = null;
-let offData = null;
-let offExit = null;
-let activeView = 'overview';
-
+let current = null;
+let history = [];
+let historyIndex = -1;
 const $ = id => document.getElementById(id);
-function showView(name) {
-  activeView = name;
-  document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== name));
-  document.querySelectorAll('.nav').forEach(b => b.classList.toggle('active', b.dataset.view === name));
-  const titles = { overview: ['OVERVIEW','Command centre'], terminal: ['TERMINAL','Local terminal'], files: ['FILE EXPLORER','Workspace files'] };
-  $('current-section').textContent = titles[name][0];
-  $('page-title').textContent = titles[name][1];
-  if (name === 'terminal') startTerminal();
-  if (name === 'files') refreshFiles();
-}
-document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
-document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showView(b.dataset.go)));
 
-async function loadSystem() {
-  const info = await window.nexus.systemInfo();
-  $('hostname').textContent = info.hostname;
-  $('platform').textContent = info.platform + ' · ' + info.release;
-  $('username').textContent = info.username;
-  $('cwd').textContent = info.cwd;
-  $('file-path').textContent = info.cwd;
+function formatSize(bytes) {
+  if (!bytes) return '—';
+  const units = ['B','KB','MB','GB','TB'];
+  let size = bytes, unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++; }
+  return size.toFixed(unit === 0 ? 0 : 1) + ' ' + units[unit];
 }
-async function startTerminal() {
-  if (term) { fit.fit(); term.focus(); return; }
-  term = new Terminal({
-    cursorBlink: true, fontFamily: 'Cascadia Code, Consolas, monospace', fontSize: 13,
-    theme: { background:'#05090e', foreground:'#d8e8ed', cursor:'#55e6dc',
-      selectionBackground:'#23515b', black:'#071018', green:'#55e6a7', cyan:'#55e6dc',
-      blue:'#5799ff', yellow:'#e8c779', red:'#ef7c83' },
-    scrollback: 5000
-  });
-  fit = new FitAddon();
-  term.loadAddon(fit);
-  term.open($('terminal-root'));
-  fit.fit();
-  term.onData(data => window.nexus.writeTerminal(data));
-  term.onResize(({cols,rows}) => window.nexus.resizeTerminal({cols,rows}));
-  offData = window.nexus.onTerminalData(data => term?.write(data));
-  offExit = window.nexus.onTerminalExit(code => term?.write('\r\n\x1b[90m[process exited: ' + code + ']\x1b[0m\r\n'));
-  try {
-    const result = await window.nexus.startTerminal();
-    $('shell-label').textContent = result.shell.toUpperCase();
-    term.focus();
-  } catch (error) {
-    term.write('\r\n\x1b[31mUnable to start shell: ' + error.message + '\x1b[0m\r\n');
-  }
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
-window.addEventListener('resize', () => {
-  if (activeView === 'terminal' && fit && term) fit.fit();
-});
-$('restart-terminal').addEventListener('click', async () => {
-  window.nexus.stopTerminal();
-  if (offData) offData();
-  if (offExit) offExit();
-  if (term) term.dispose();
-  term = null; fit = null; offData = null; offExit = null;
-  $('terminal-root').innerHTML = '';
-  await startTerminal();
-});
-async function refreshFiles() {
-  const info = await window.nexus.systemInfo();
-  $('file-path').textContent = info.cwd;
-  const entries = await window.nexus.listFiles();
-  const list = $('file-list'); list.innerHTML = '';
-  if (!Array.isArray(entries)) { list.textContent = entries.error || 'Unable to read this folder.'; return; }
-  if (!entries.length) { list.textContent = 'This folder is empty.'; return; }
-  entries.forEach(item => {
+function setActive(buttonId) {
+  document.querySelectorAll('.side-link').forEach(button => button.classList.remove('selected'));
+  if (buttonId) $(buttonId).classList.add('selected');
+}
+function renderDrives(drives) {
+  const list = $('drive-list');
+  list.innerHTML = '';
+  drives.forEach(drive => {
     const button = document.createElement('button');
-    button.className = 'file-item';
-    const icon = document.createElement('span'); icon.textContent = item.directory ? '▣' : '▤';
-    const name = document.createElement('span'); name.textContent = item.name;
-    const type = document.createElement('small'); type.textContent = item.directory ? 'FOLDER' : 'FILE';
-    button.append(icon,name,type);
-    button.addEventListener('click', async () => {
-      const result = await window.nexus.openItem(item.name);
-      if (result) alert(result);
-    });
+    button.className = 'drive-link';
+    button.innerHTML = '<span>▣</span><span></span>';
+    button.lastElementChild.textContent = drive.name;
+    button.addEventListener('click', () => navigate(drive.path));
     list.append(button);
   });
 }
-$('choose-folder').addEventListener('click', async () => {
-  const result = await window.nexus.chooseWorkspace();
-  if (result.canceled) return;
-  await loadSystem();
-  await refreshFiles();
+function renderBreadcrumbs(folderPath) {
+  const bar = $('breadcrumbs');
+  bar.innerHTML = '';
+  const parsed = folderPath.replace(/\\/g, '/');
+  const parts = parsed.split('/').filter(Boolean);
+  let currentPath = folderPath.startsWith('/') ? '/' : '';
+  if (/^[A-Za-z]:/.test(parts[0] || '')) {
+    currentPath = parts[0] + '\\';
+    parts.shift();
+  }
+  const root = document.createElement('button');
+  root.className = 'crumb';
+  root.textContent = 'This PC';
+  root.addEventListener('click', showHome);
+  bar.append(root);
+  parts.forEach((part, index) => {
+    const sep = document.createElement('span'); sep.className = 'crumb-sep'; sep.textContent = '›'; bar.append(sep);
+    currentPath = currentPath === '/' ? '/' + part : currentPath ? currentPath.replace(/[\\/]$/, '') + (currentPath.includes(':') ? '\\' : '/') + part : part;
+    const crumb = document.createElement('button');
+    crumb.className = 'crumb';
+    crumb.textContent = part;
+    const target = index === parts.length - 1 ? folderPath : currentPath;
+    crumb.addEventListener('click', () => navigate(target));
+    bar.append(crumb);
+  });
+}
+function renderFolder(data, addHistory = true) {
+  if (!data || data.error) { alert(data?.error || 'Unable to open folder.'); return; }
+  current = data;
+  if (addHistory) {
+    history = history.slice(0, historyIndex + 1);
+    history.push(data.path);
+    historyIndex = history.length - 1;
+  }
+  $('welcome').classList.add('hidden');
+  $('quick-access').classList.add('hidden');
+  $('file-area').classList.remove('hidden');
+  $('page-title').textContent = data.path;
+  $('folder-title').textContent = data.path.split(/[\\/]/).filter(Boolean).pop() || data.path;
+  $('item-count').textContent = data.entries.length + (data.entries.length === 1 ? ' item' : ' items');
+  $('back-button').disabled = historyIndex <= 0;
+  $('up-button').disabled = !data.parent;
+  renderBreadcrumbs(data.path);
+  renderDrives(data.drives || []);
+  drawEntries(data.entries);
+}
+function drawEntries(entries) {
+  const list = $('file-list');
+  list.innerHTML = '';
+  $('empty-state').classList.toggle('hidden', entries.length !== 0);
+  entries.forEach(entry => {
+    const row = document.createElement('button');
+    row.className = 'file-row';
+    const name = document.createElement('span'); name.className = 'file-name';
+    const icon = document.createElement('span'); icon.className = entry.directory ? 'item-icon folder-icon' : 'item-icon file-icon';
+    icon.textContent = entry.directory ? '▰' : '▤';
+    const label = document.createElement('span'); label.textContent = entry.name;
+    name.append(icon, label);
+    const type = document.createElement('span'); type.className = 'file-type'; type.textContent = entry.extension;
+    const date = document.createElement('span'); date.className = 'file-date'; date.textContent = formatDate(entry.modified);
+    const size = document.createElement('span'); size.className = 'file-size'; size.textContent = entry.directory ? '—' : formatSize(entry.size);
+    row.append(name, type, date, size);
+    row.addEventListener('dblclick', async () => {
+      if (entry.directory) await navigate(entry.path);
+      else {
+        const error = await window.nexus.openFile(entry.path);
+        if (error) alert(error);
+      }
+    });
+    row.addEventListener('click', () => {
+      document.querySelectorAll('.file-row').forEach(item => item.classList.remove('focused'));
+      row.classList.add('focused');
+    });
+    list.append(row);
+  });
+}
+async function navigate(folder, addHistory = true) {
+  const result = await window.nexus.navigate(folder);
+  renderFolder(result, addHistory);
+}
+function showHome() {
+  $('welcome').classList.remove('hidden');
+  $('quick-access').classList.remove('hidden');
+  $('file-area').classList.add('hidden');
+  $('page-title').textContent = 'Home';
+  $('folder-title').textContent = 'Quick access';
+  $('item-count').textContent = '';
+  $('breadcrumbs').innerHTML = '';
+  setActive('home-button');
+}
+async function showComputer() {
+  const drives = await window.nexus.getDrives();
+  renderDrives(drives);
+  $('welcome').classList.add('hidden');
+  $('quick-access').classList.remove('hidden');
+  $('file-area').classList.add('hidden');
+  $('page-title').textContent = 'This PC';
+  $('folder-title').textContent = 'Available drives';
+  $('item-count').textContent = drives.length + ' drives';
+  $('usb-card').classList.add('hidden');
+  $('computer-card').classList.add('hidden');
+  $('breadcrumbs').innerHTML = '<span class="crumb current">This PC</span>';
+  setActive('all-files-button');
+  const grid = $('quick-access');
+  grid.innerHTML = '';
+  drives.forEach(drive => {
+    const card = document.createElement('button');
+    card.className = 'quick-card';
+    card.innerHTML = '<span class="quick-symbol pc-symbol">▣</span><b></b><small>Open drive</small>';
+    card.querySelector('b').textContent = drive.name;
+    card.addEventListener('click', () => navigate(drive.path));
+    grid.append(card);
+  });
+}
+$('home-button').addEventListener('click', showHome);
+$('all-files-button').addEventListener('click', showComputer);
+$('usb-card').addEventListener('click', () => navigate(current?.path || ''));
+$('computer-card').addEventListener('click', showComputer);
+$('browse-button').addEventListener('click', async () => {
+  const result = await window.nexus.chooseFolder();
+  if (!result.canceled) renderFolder(result);
 });
-loadSystem();
+$('open-folder').addEventListener('click', async () => {
+  const result = await window.nexus.chooseFolder();
+  if (!result.canceled) renderFolder(result);
+});
+$('up-button').addEventListener('click', () => { if (current?.parent) navigate(current.parent); });
+$('back-button').addEventListener('click', async () => {
+  if (historyIndex > 0) {
+    historyIndex--;
+    const result = await window.nexus.navigate(history[historyIndex]);
+    renderFolder(result, false);
+  }
+});
+$('refresh-button').addEventListener('click', () => { if (current) navigate(current.path, false); });
+$('search').addEventListener('input', event => {
+  if (!current) return;
+  const query = event.target.value.toLowerCase();
+  drawEntries(current.entries.filter(entry => entry.name.toLowerCase().includes(query)));
+});
+(async () => {
+  const data = await window.nexus.initial();
+  renderFolder(data);
+  showHome();
+})();
