@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('nexus', {
   addSyncFolders: () => ipcRenderer.invoke('nexus:add-sync-folders'),
   syncNow: () => ipcRenderer.invoke('nexus:sync-now'),
   syncStatus: () => ipcRenderer.invoke('nexus:sync-status'),
+  syncSources: () => ipcRenderer.invoke('nexus:sync-sources'),
+  removeSyncSource: id => ipcRenderer.invoke('nexus:remove-sync-source', id),
   onSyncStatus: callback => ipcRenderer.on('nexus:sync-status', (_event, status) => callback(status)),
   newFolder: (name, parentId) => ipcRenderer.invoke('nexus:new-folder', name, parentId),
   rename: (id, name, isFolder) => ipcRenderer.invoke('nexus:rename', id, name, isFolder),

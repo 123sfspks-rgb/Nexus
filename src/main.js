@@ -331,6 +331,7 @@ async function syncOneFile(source, fullPath, relativePath, parentId, counts) {
     }
     requireUnlocked();
     fs.renameSync(tempPath, finalPath);
+    const previousRecord = existing ? { ...existing } : null;
     const previousBlob = existing ? existing.blobId : null;
     if (existing) {
       existing.blobId = blobId;
@@ -338,7 +339,6 @@ async function syncOneFile(source, fullPath, relativePath, parentId, counts) {
       existing.modified = after.mtime.toISOString();
       existing.sourceMtimeMs = after.mtimeMs;
       existing.name = cleanDisplayName(path.basename(fullPath));
-      counts.updated++;
     } else {
       state.manifest.files.push({
         id: crypto.randomUUID(),
@@ -351,17 +351,18 @@ async function syncOneFile(source, fullPath, relativePath, parentId, counts) {
         syncRelativePath: relativePath,
         sourceMtimeMs: after.mtimeMs
       });
-      counts.added++;
     }
     try {
       writeManifest();
       if (previousBlob) {
         try { fs.rmSync(path.join(state.path, OBJECTS_DIR, previousBlob + '.nxb'), { force: true }); } catch (_) {}
       }
+      if (existing) counts.updated++;
+      else counts.added++;
     } catch (error) {
       if (existing) {
-        // Keep the previous encrypted object reference if the manifest could not be saved.
-        existing.blobId = previousBlob;
+        for (const key of Object.keys(existing)) delete existing[key];
+        Object.assign(existing, previousRecord);
       } else {
         state.manifest.files = state.manifest.files.filter(item => item.blobId !== blobId);
       }
@@ -424,6 +425,7 @@ async function runSyncNow() {
     return { ok: true, queued: true, ...currentSyncStatus() };
   }
   syncRunning = true;
+  publishSyncStatus();
   const counts = { added: 0, updated: 0, failed: 0, folders: 0 };
   try {
     const sources = [...(unlocked.manifest.syncSources || [])];
@@ -463,7 +465,8 @@ async function addSyncFolders() {
     if (!fs.existsSync(absolute) || !fs.statSync(absolute).isDirectory()) continue;
     if (isInside(state.path, absolute)) continue;
     const key = absolute.toLowerCase();
-    if (existing.has(key)) continue;
+    const overlaps = [...existing].some(other => isInside(other, absolute) || isInside(absolute, other));
+    if (existing.has(key) || overlaps) continue;
     state.manifest.syncSources.push({
       id: crypto.randomUUID(),
       path: absolute,
@@ -583,6 +586,29 @@ ipcMain.handle('nexus:import', async (_event, parentId) => { try { return await 
 ipcMain.handle('nexus:add-sync-folders', async () => { try { return await addSyncFolders(); } catch (error) { return { error: error.message }; } });
 ipcMain.handle('nexus:sync-now', async () => { try { return await runSyncNow(); } catch (error) { return { error: error.message }; } });
 ipcMain.handle('nexus:sync-status', () => currentSyncStatus());
+ipcMain.handle('nexus:sync-sources', () => ({
+  sources: unlocked ? (unlocked.manifest.syncSources || []).map(source => ({
+    id: source.id, label: source.label, path: source.path
+  })) : []
+}));
+ipcMain.handle('nexus:remove-sync-source', (_event, sourceId) => {
+  try {
+    const state = requireUnlocked();
+    const source = state.manifest.syncSources.find(item => item.id === sourceId);
+    if (!source) throw new Error('That sync folder is no longer configured.');
+    state.manifest.syncSources = state.manifest.syncSources.filter(item => item.id !== sourceId);
+    for (const item of [...state.manifest.files, ...state.manifest.folders]) {
+      if (item.syncSourceId === sourceId) {
+        delete item.syncSourceId;
+        delete item.syncRelativePath;
+        delete item.sourceMtimeMs;
+      }
+    }
+    writeManifest();
+    startSyncMonitoring();
+    return { ok: true, ...currentSyncStatus() };
+  } catch (error) { return { error: error.message }; }
+});
 ipcMain.handle('nexus:new-folder', (_event, name, parentId) => {
   try {
     const state = requireUnlocked();

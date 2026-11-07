@@ -156,6 +156,8 @@ function renderSyncStatus(status) {
   const count = status && Number(status.sources || 0);
   const label = $('sync-status');
   if (!label) return;
+  const manageButton = $('sync-folders-button');
+  if (manageButton) manageButton.textContent = status && status.sources ? 'MANAGE SYNC (' + status.sources + ')' : '＋ SYNC PC FOLDERS';
   if (!status || !status.active) label.textContent = 'SYNC PAUSED';
   else if (!count) label.textContent = 'NO PC FOLDERS SYNCED';
   else if (status.running) label.textContent = 'SYNCING ' + count + ' FOLDER' + (count === 1 ? '' : 'S');
@@ -169,15 +171,40 @@ function renderSyncStatus(status) {
   }
 }
 async function setupSyncFolders() {
+  const current = await window.nexus.syncSources();
+  if (current.sources.length) {
+    const lines = current.sources.map((source, index) =>
+      (index + 1) + '. ' + source.label + '\\n   ' + source.path
+    ).join('\\n');
+    const choice = prompt(
+      'AUTOMATIC PC SYNC\\n\\n' + lines +
+      '\\n\\nType ADD to add more folders, or enter a folder number to stop syncing it. ' +
+      'Its already-encrypted files will stay in NEXUS.'
+    );
+    if (choice === null) return;
+    if (choice.trim().toLowerCase() !== 'add') {
+      const index = Number(choice.trim()) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= current.sources.length) {
+        alert('No change made.');
+        return;
+      }
+      const source = current.sources[index];
+      if (!confirm('Stop syncing "' + source.label + '"? Its encrypted files will remain in the vault.')) return;
+      const removed = await window.nexus.removeSyncSource(source.id);
+      if (removed.error) alert(removed.error);
+      renderSyncStatus(await window.nexus.syncStatus());
+      return;
+    }
+  }
   const result = await window.nexus.addSyncFolders();
   if (result.error) { alert(result.error); return; }
   if (result.canceled) return;
   renderSyncStatus(await window.nexus.syncStatus());
   if (result.added) {
-    alert('NEXUS is now syncing ' + result.added + ' new PC folder' +
-      (result.added === 1 ? '' : 's') + '. It will keep checking for new and changed files while the USB is connected and the vault is unlocked.');
+    alert('NEXUS added ' + result.added + ' PC folder' + (result.added === 1 ? '' : 's') +
+      ' to automatic sync. New and changed files will be encrypted into this USB while it is connected and the vault is unlocked.');
   } else {
-    alert('Those folders were already in your NEXUS sync list. NEXUS has checked them again.');
+    alert('Those folders were already in your sync list. NEXUS checked them again.');
   }
 }
 
