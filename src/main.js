@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -12,12 +12,8 @@ const OBJECTS_DIR = 'objects';
 const MANIFEST_MAGIC = Buffer.from('NXM1');
 const FILE_MAGIC = Buffer.from('NXB1');
 const KDF = { N: 32768, r: 8, p: 1, keyLength: 32 };
-const WATCHER_MODE = process.argv.includes('--watch-usb');
 
 let win = null;
-let tray = null;
-let watcherTimer = null;
-let lastDetectedVault = null;
 let pendingVaultPath = null;
 let unlocked = null;
 let tempSessionPath = null;
@@ -272,68 +268,17 @@ function removeFolderContents(folderId) {
   state.manifest.files = state.manifest.files.filter(item => item.parentId !== folderId);
   state.manifest.folders = state.manifest.folders.filter(item => item.id !== folderId);
 }
-function startupShortcutPath() {
-  return path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'NEXUS USB Auto-Launch.lnk');
-}
-async function enableAutoLaunch() {
-  if (process.platform !== 'win32') throw new Error('USB auto-launch is supported on Windows only.');
-  if (!app.isPackaged) throw new Error('Enable auto-launch from the compiled NEXUS.exe.');
-  const targetFolder = path.join(app.getPath('appData'), 'NEXUS');
-  fs.mkdirSync(targetFolder, { recursive: true });
-  const targetExe = path.join(targetFolder, 'NEXUS.exe');
-  if (path.resolve(process.execPath).toLowerCase() !== path.resolve(targetExe).toLowerCase()) fs.copyFileSync(process.execPath, targetExe);
-  const startupFolder = path.dirname(startupShortcutPath());
-  fs.mkdirSync(startupFolder, { recursive: true });
-  const ok = shell.writeShortcutLink(startupShortcutPath(), 'create', {
-    target: targetExe, args: '--watch-usb',
-    description: 'NEXUS: open the encrypted vault when its USB drive is connected.',
-    icon: targetExe, iconIndex: 0
-  });
-  if (!ok) throw new Error('Windows could not create the startup shortcut.');
-  return { enabled: true };
-}
-function disableAutoLaunch() {
-  if (process.platform === 'win32') {
-    try { fs.rmSync(startupShortcutPath(), { force: true }); } catch (_) {}
-    if (!WATCHER_MODE) { try { fs.rmSync(path.join(app.getPath('appData'), 'NEXUS', 'NEXUS.exe'), { force: true }); } catch (_) {} }
-  }
-  return { enabled: false };
-}
-function isAutoLaunchEnabled() { return process.platform === 'win32' && fs.existsSync(startupShortcutPath()); }
-function startWatcher() {
-  const scanAndOpen = () => {
-    const found = scanForVault();
-    if (found && found !== lastDetectedVault) {
-      lastDetectedVault = found; pendingVaultPath = found; ensureWindow();
-    } else if (!found && lastDetectedVault) {
-      lastDetectedVault = null; pendingVaultPath = null; clearUnlocked();
-    }
-  };
-  app.getFileIcon(process.execPath, { size: 'small' }).then(icon => {
-    tray = new Tray(icon);
-    tray.setToolTip('NEXUS USB Auto-Launch');
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'NEXUS USB watcher is active', enabled: false },
-      { type: 'separator' },
-      { label: 'Check for USB vault now', click: scanAndOpen },
-      { label: 'Disable auto-launch on this PC', click: () => { disableAutoLaunch(); app.quit(); } },
-      { label: 'Quit watcher', click: () => app.quit() }
-    ]));
-  }).catch(() => {});
-  scanAndOpen();
-  watcherTimer = setInterval(scanAndOpen, 2500);
-}
 app.whenReady().then(() => {
-  if (WATCHER_MODE && process.platform === 'win32') startWatcher();
-  else { pendingVaultPath = scanForVault(); ensureWindow(); }
+  pendingVaultPath = scanForVault();
+  ensureWindow();
 });
-app.on('activate', () => { if (!win && !WATCHER_MODE) ensureWindow(); });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !WATCHER_MODE) app.quit(); });
-app.on('will-quit', () => { if (watcherTimer) clearInterval(watcherTimer); clearUnlocked(); });
+app.on('activate', () => { if (!win) ensureWindow(); });
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => clearUnlocked());
 powerMonitor.on('suspend', () => clearUnlocked());
 setInterval(() => { if (unlocked && !fs.existsSync(unlocked.path)) clearUnlocked(); }, 1500);
 
-ipcMain.handle('nexus:initial', () => ({ vaultPath: pendingVaultPath || scanForVault(), unlocked: Boolean(unlocked), autoLaunch: isAutoLaunchEnabled() }));
+ipcMain.handle('nexus:initial', () => ({ vaultPath: pendingVaultPath || scanForVault(), unlocked: Boolean(unlocked) }));
 ipcMain.handle('nexus:choose-location', async () => {
   const result = await dialog.showOpenDialog(win, { title: 'Choose your USB drive or NEXUS folder', properties: ['openDirectory', 'createDirectory'] });
   return result.canceled || !result.filePaths[0] ? { canceled: true } : { path: result.filePaths[0] };
@@ -406,8 +351,3 @@ ipcMain.handle('nexus:export-file', async (_event, id) => {
     return { ok: true, path: result.filePath };
   } catch (error) { return { error: error.message }; }
 });
-ipcMain.handle('nexus:auto-launch', async (_event, enabled) => {
-  try { return enabled ? await enableAutoLaunch() : disableAutoLaunch(); }
-  catch (error) { return { error: error.message }; }
-});
-ipcMain.handle('nexus:close-window', () => { if (!WATCHER_MODE) app.quit(); else if (win) win.hide(); return { ok: true }; });
