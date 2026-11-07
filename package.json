@@ -1,18 +1,12 @@
 {
   "name": "nexus-desktop",
-  "version": "1.0.0",
-  "description": "NEXUS portable Windows workspace with a native terminal",
+  "version": "1.1.0",
+  "description": "NEXUS - a simple portable desktop file workspace",
   "main": "src/main.js",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "postinstall": "electron-builder install-app-deps",
     "dist:win": "electron-builder --win portable"
-  },
-  "dependencies": {
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
-    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "electron": "^35.0.0",
@@ -22,8 +16,7 @@
     "appId": "com.nexus.workspace",
     "productName": "NEXUS",
     "asar": true,
-    "files": ["src/**/*", "node_modules/**/*", "package.json"],
-    "npmRebuild": true,
+    "files": ["src/**/*", "package.json"],
     "win": { "target": ["portable"], "artifactName": "NEXUS-${version}-Windows-Portable.exe" },
     "portable": { "artifactName": "NEXUS-${version}-Windows-Portable.exe" }
   }
