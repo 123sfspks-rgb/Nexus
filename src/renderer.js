@@ -2,6 +2,7 @@ let currentFolderId = null;
 let currentEntries = [];
 let selectedItem = null;
 let vaultPath = null;
+let activeObjectUrl = null;
 const $ = id => document.getElementById(id);
 
 function showLock(message) {
@@ -97,14 +98,57 @@ function drawEntries(entries) {
     });
     row.addEventListener('dblclick', async () => {
       if (item.directory) await openVault(item.id);
-      else {
-        const result = await window.nexus.openFile(item.id);
-        if (result.error) alert(result.error);
-      }
+      else await previewItem(item);
     });
     list.append(row);
   }
 }
+
+async function previewItem(item) {
+  closeViewer();
+  const result = await window.nexus.previewFile(item.id);
+  if (result.error) { alert(result.error); return; }
+  $('viewer-title').textContent = result.name;
+  const host = $('viewer-content');
+  host.replaceChildren();
+  if (result.kind === 'text') {
+    const pre = document.createElement('pre');
+    pre.className = 'text-preview';
+    pre.textContent = result.text;
+    host.append(pre);
+  } else {
+    const binary = atob(result.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: result.mime });
+    activeObjectUrl = URL.createObjectURL(blob);
+    let element;
+    if (result.kind === 'image') {
+      element = document.createElement('img');
+      element.className = 'image-preview';
+    } else if (result.kind === 'pdf') {
+      element = document.createElement('iframe');
+      element.className = 'pdf-preview';
+      element.title = result.name;
+    } else {
+      element = document.createElement(result.kind);
+      element.controls = true;
+      element.className = result.kind + '-preview';
+    }
+    element.src = activeObjectUrl;
+    host.append(element);
+  }
+  $('viewer').classList.remove('hidden');
+}
+function closeViewer() {
+  $('viewer').classList.add('hidden');
+  $('viewer-content').replaceChildren();
+  if (activeObjectUrl) {
+    URL.revokeObjectURL(activeObjectUrl);
+    activeObjectUrl = null;
+  }
+}
+
 async function createVault() {
   const password = $('new-password').value, confirmPassword = $('confirm-password').value;
   if (password.length < 10) { $('create-error').textContent = 'Use at least 10 characters.'; return; }
@@ -132,6 +176,7 @@ $('create-button').addEventListener('click', async () => {
 });
 $('create-vault-button').addEventListener('click', createVault);
 $('lock-button').addEventListener('click', async () => {
+  closeViewer();
   await window.nexus.lock();
   if (vaultPath) showUnlock(); else showNoVault();
 });
@@ -147,7 +192,7 @@ $('import-button').addEventListener('click', async () => {
   if (result.error) { alert(result.error); return; }
   if (result.canceled) return;
   await refreshFolder();
-  alert('Encrypted import complete: ' + result.files + ' files and ' + result.folders + ' folders. Original source copies have NOT been deleted.');
+  alert('Encrypted import complete: ' + result.files + ' files and ' + result.folders + ' folders. Original source copies remain unchanged. If they are on this USB, they are still readable outside NEXUS.');
 });
 $('new-folder-button').addEventListener('click', async () => {
   const name = prompt('New folder name:');
@@ -158,13 +203,11 @@ $('new-folder-button').addEventListener('click', async () => {
 $('file-list').addEventListener('contextmenu', event => {
   const row = event.target.closest('.file-row'); if (!row) return;
   event.preventDefault(); row.click(); if (!selectedItem) return;
-  const action = prompt('Type: rename, export, or delete');
+  const action = prompt('Type: rename or delete');
   if (!action) return;
   if (action.toLowerCase() === 'rename') {
     const name = prompt('New name:', selectedItem.name);
     if (name) window.nexus.rename(selectedItem.id, name, selectedItem.directory).then(result => result.error ? alert(result.error) : refreshFolder());
-  } else if (action.toLowerCase() === 'export' && !selectedItem.directory) {
-    window.nexus.exportFile(selectedItem.id).then(result => { if (result.error) alert(result.error); });
   } else if (action.toLowerCase() === 'delete') {
     if (confirm('Delete ' + selectedItem.name + ' from the encrypted vault? This cannot be undone.')) {
       window.nexus.deleteItem(selectedItem.id, selectedItem.directory).then(result => result.error ? alert(result.error) : refreshFolder());
@@ -172,8 +215,11 @@ $('file-list').addEventListener('contextmenu', event => {
   }
 });
 window.nexus.onForceLock(() => {
+  closeViewer();
   vaultPath = null;
   showLock('The USB was removed or the device suspended. NEXUS has locked the vault.');
 });
-window.addEventListener('beforeunload', () => { window.nexus.lock(); });
+$('viewer-close').addEventListener('click', closeViewer);
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeViewer(); });
+window.addEventListener('beforeunload', () => { closeViewer(); window.nexus.lock(); });
 initialize();

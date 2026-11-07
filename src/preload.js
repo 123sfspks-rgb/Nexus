@@ -11,7 +11,6 @@ contextBridge.exposeInMainWorld('nexus', {
   newFolder: (name, parentId) => ipcRenderer.invoke('nexus:new-folder', name, parentId),
   rename: (id, name, isFolder) => ipcRenderer.invoke('nexus:rename', id, name, isFolder),
   deleteItem: (id, isFolder) => ipcRenderer.invoke('nexus:delete', id, isFolder),
-  openFile: id => ipcRenderer.invoke('nexus:open-file', id),
-  exportFile: id => ipcRenderer.invoke('nexus:export-file', id),
+  previewFile: id => ipcRenderer.invoke('nexus:preview-file', id),
   onForceLock: callback => ipcRenderer.on('nexus:force-lock', callback)
 });

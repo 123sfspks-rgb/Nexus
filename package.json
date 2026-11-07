@@ -1,7 +1,7 @@
 {
   "name": "nexus-desktop",
-  "version": "2.0.0",
-  "description": "NEXUS - encrypted USB vault and file manager",
+  "version": "1.0.0",
+  "description": "NEXUS encrypted USB vault",
   "main": "src/main.js",
   "license": "MIT",
   "scripts": {
@@ -24,10 +24,10 @@
       "target": [
         "portable"
       ],
-      "artifactName": "NEXUS-${version}-Windows-Portable.exe"
+      "artifactName": "NEXUS-Windows-Portable.exe"
     },
     "portable": {
-      "artifactName": "NEXUS-${version}-Windows-Portable.exe"
+      "artifactName": "NEXUS-Windows-Portable.exe"
     }
   }
 }

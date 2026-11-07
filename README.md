@@ -1,37 +1,37 @@
 # NEXUS
 
-NEXUS is a Windows desktop app for a password-protected, encrypted USB vault.
+NEXUS is a Windows application for an encrypted USB vault. Imported files are encrypted on the USB and can only be listed or previewed through NEXUS after the correct password is entered.
 
-## Security model
+## What is protected
 
-- Files imported into the vault are encrypted individually with AES-256-GCM.
-- The vault index (file names, folder names, and structure) is encrypted too.
-- A password-derived key is created with scrypt. The password is never stored.
-- The vault folder is marked hidden/system on Windows as a convenience. Hidden is not security; encryption is the protection.
-- Wrong passwords do not reveal the file list or file contents.
-- Removing the USB or suspending the PC locks the session.
-- Files opened in another application are decrypted into a temporary session directory and removed when NEXUS locks or exits. This is best-effort cleanup, not a guarantee of secure erasure.
-- Exported files are ordinary plaintext copies. Files in the original source folders also remain plaintext until the user removes those originals.
+- Each imported file is encrypted with AES-256-GCM.
+- File names, folder names, and the folder structure are stored in an encrypted manifest.
+- The password is never saved. NEXUS derives the encryption key using scrypt.
+- The vault is not mounted as a Windows drive. NEXUS does not expose a decrypted folder to File Explorer.
+- Supported previews (text, common images, PDF, audio, and video) are decrypted in memory and displayed inside NEXUS. NEXUS does not launch another application or write a plaintext preview file to disk.
+- Locking NEXUS, removing the USB, or suspending the PC clears the active key from the app session and closes the preview. Memory clearing is best-effort; no software can promise forensic erasure of RAM.
 
-## First use
+## Make the USB NEXUS-only
 
-1. Put NEXUS.exe on the USB drive.
-2. Launch it and choose Create encrypted vault.
-3. Select the USB drive or the NEXUS folder on it and set a password of at least 10 characters.
-4. Import existing folders and files into the vault.
-5. Confirm that the encrypted copies are present before deleting old unencrypted source folders.
-6. Keep the password safe. There is no password reset or recovery key.
+1. Back up anything currently on the USB. Creating a vault does not encrypt files already sitting outside it.
+2. For the cleanest setup, use an empty or newly formatted USB drive. Put `NEXUS.exe` at the drive root.
+3. Start NEXUS and choose **Create encrypted vault**. Select the USB drive root and set a strong password.
+4. Import your files from the PC or another backup location into NEXUS.
+5. Keep personal files inside the vault. Do not leave ordinary copies elsewhere on the USB. The only intended item outside the vault is `NEXUS.exe` (plus any auto-run configuration you create yourself).
+6. Test by locking NEXUS and checking the USB in File Explorer. The vault data is encrypted; file names and contents will not be readable there.
 
-The encrypted vault is stored in a folder named NEXUS_VAULT on the selected drive. The folder is hidden on Windows, but its contents remain encrypted even if someone reveals it.
+**Important:** Import copies files into the vault; it does not delete the original copies. If you import from the USB itself, those original files remain readable outside NEXUS. Do not delete your only originals until you have checked the encrypted copies and made a separate backup. Flash-drive formatting and deletion cannot guarantee that old data is physically unrecoverable, so do not reuse a USB containing sensitive old data as though it were securely wiped.
+
+## Using NEXUS
+
+Connect the USB, launch `NEXUS.exe` (or use the auto-run arrangement you configure on your PC), and enter the vault password. Double-click folders to navigate and supported files to preview them inside NEXUS. Right-click files or folders to rename or delete them.
+
+Unsupported formats and files larger than 32 MB remain encrypted but cannot currently be previewed in the built-in viewer. NEXUS does not automatically export or open them in external applications.
+
+## Password and recovery
+
+There is no password reset or recovery key. Losing the password means losing access to the vault. Keep a separate secure backup of important data and the password.
 
 ## Auto-run
 
-Configure USB auto-run separately on the Windows PCs you control. NEXUS itself does not install a startup helper.
-
-## Important limits
-
-- Losing the password means losing access to the encrypted data.
-- Encryption at rest protects the vault while locked. When unlocked, file names and data are available to NEXUS.
-- Opening a file in another app creates a temporary decrypted copy. Do not use this for highly sensitive files on a shared or untrusted PC.
-- Secure deletion cannot be guaranteed on SSDs, flash drives, or wear-levelled storage. Delete old originals only after checking the encrypted import.
-- NEXUS does not automatically encrypt files elsewhere on the USB. Import them into the vault.
+USB auto-run is not configured by NEXUS. Set up the launch behaviour separately on the Windows PCs you control.

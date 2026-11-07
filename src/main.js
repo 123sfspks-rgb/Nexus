@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -16,7 +16,6 @@ const KDF = { N: 32768, r: 8, p: 1, keyLength: 32 };
 let win = null;
 let pendingVaultPath = null;
 let unlocked = null;
-let tempSessionPath = null;
 let isLocking = false;
 
 function isInside(parent, candidate) {
@@ -80,18 +79,12 @@ function writeManifest() {
 function setUnlocked(folder, key, manifest) {
   unlocked = { path: folder, key, manifest };
   pendingVaultPath = folder;
-  tempSessionPath = path.join(app.getPath('temp'), 'NEXUS-SESSION-' + process.pid + '-' + crypto.randomBytes(4).toString('hex'));
-  fs.mkdirSync(tempSessionPath, { recursive: true });
 }
 function clearUnlocked() {
   if (isLocking) return;
   isLocking = true;
   if (unlocked && unlocked.key) unlocked.key.fill(0);
   unlocked = null;
-  if (tempSessionPath) {
-    try { fs.rmSync(tempSessionPath, { recursive: true, force: true }); } catch (_) {}
-    tempSessionPath = null;
-  }
   if (win && !win.isDestroyed()) win.webContents.send('nexus:force-lock');
   isLocking = false;
 }
@@ -200,23 +193,6 @@ async function encryptFileToBlob(source, target, key) {
     throw error;
   }
 }
-async function decryptBlobToFile(blobPath, destination, key) {
-  const stat = fs.statSync(blobPath);
-  if (stat.size < 32) throw new Error('Encrypted file is damaged.');
-  const fd = fs.openSync(blobPath, 'r');
-  const header = Buffer.alloc(16), tag = Buffer.alloc(16);
-  try { fs.readSync(fd, header, 0, 16, 0); fs.readSync(fd, tag, 0, 16, stat.size - 16); }
-  finally { fs.closeSync(fd); }
-  if (!header.subarray(0, 4).equals(FILE_MAGIC)) throw new Error('Encrypted file format is invalid.');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, header.subarray(4, 16));
-  decipher.setAuthTag(tag);
-  if (stat.size === 32) {
-    decipher.final();
-    fs.writeFileSync(destination, Buffer.alloc(0));
-  } else {
-    await pipeline(fs.createReadStream(blobPath, { start: 16, end: stat.size - 17 }), decipher, fs.createWriteStream(destination, { flags: 'w' }));
-  }
-}
 async function importPath(sourcePath, parentId, counts) {
   const state = requireUnlocked();
   const full = path.resolve(sourcePath);
@@ -254,6 +230,55 @@ function findFile(id) {
   if (!file || !/^[a-f0-9-]{36}$/i.test(file.blobId)) throw new Error('That file no longer exists.');
   return file;
 }
+
+const MAX_PREVIEW_BYTES = 32 * 1024 * 1024;
+const TEXT_EXTENSIONS = new Set([
+  '.txt','.md','.markdown','.csv','.tsv','.json','.xml','.log','.js','.jsx',
+  '.ts','.tsx','.css','.html','.htm','.py','.java','.c','.cpp','.h','.hpp',
+  '.cs','.php','.sql','.yaml','.yml','.toml','.ini','.sh','.bat','.ps1'
+]);
+const PREVIEW_TYPES = {
+  '.png': { kind: 'image', mime: 'image/png' },
+  '.jpg': { kind: 'image', mime: 'image/jpeg' },
+  '.jpeg': { kind: 'image', mime: 'image/jpeg' },
+  '.gif': { kind: 'image', mime: 'image/gif' },
+  '.webp': { kind: 'image', mime: 'image/webp' },
+  '.bmp': { kind: 'image', mime: 'image/bmp' },
+  '.ico': { kind: 'image', mime: 'image/x-icon' },
+  '.pdf': { kind: 'pdf', mime: 'application/pdf' },
+  '.mp3': { kind: 'audio', mime: 'audio/mpeg' },
+  '.wav': { kind: 'audio', mime: 'audio/wav' },
+  '.ogg': { kind: 'audio', mime: 'audio/ogg' },
+  '.m4a': { kind: 'audio', mime: 'audio/mp4' },
+  '.mp4': { kind: 'video', mime: 'video/mp4' },
+  '.webm': { kind: 'video', mime: 'video/webm' },
+  '.mov': { kind: 'video', mime: 'video/quicktime' }
+};
+function previewFile(id) {
+  const state = requireUnlocked();
+  const file = findFile(id);
+  const blobPath = path.join(state.path, OBJECTS_DIR, file.blobId + '.nxb');
+  const stat = fs.statSync(blobPath);
+  if (stat.size > MAX_PREVIEW_BYTES + 32) {
+    throw new Error('This file is too large for the built-in NEXUS preview (32 MB limit). It remains encrypted on the USB.');
+  }
+  const plaintext = decryptRecord(fs.readFileSync(blobPath), state.key, FILE_MAGIC);
+  const ext = path.extname(file.name).toLowerCase();
+  if (TEXT_EXTENSIONS.has(ext)) {
+    const text = plaintext.toString('utf8');
+    plaintext.fill(0);
+    return { ok: true, kind: 'text', name: file.name, text };
+  }
+  const type = PREVIEW_TYPES[ext];
+  if (!type) {
+    plaintext.fill(0);
+    throw new Error('NEXUS cannot preview this file type yet. It remains encrypted, and NEXUS will not open it in another application.');
+  }
+  const data = plaintext.toString('base64');
+  plaintext.fill(0);
+  return { ok: true, kind: type.kind, mime: type.mime, name: file.name, data };
+}
+
 function findFolder(id) {
   const folder = requireUnlocked().manifest.folders.find(item => item.id === id);
   if (!folder) throw new Error('That folder no longer exists.');
@@ -329,25 +354,6 @@ ipcMain.handle('nexus:delete', (_event, id, isFolder) => {
     writeManifest(); return { ok: true };
   } catch (error) { return { error: error.message }; }
 });
-ipcMain.handle('nexus:open-file', async (_event, id) => {
-  let tempFile = null;
-  try {
-    const state = requireUnlocked(), file = findFile(id), ext = path.extname(file.name);
-    tempFile = path.join(tempSessionPath, crypto.randomUUID() + ext);
-    await decryptBlobToFile(path.join(state.path, OBJECTS_DIR, file.blobId + '.nxb'), tempFile, state.key);
-    const error = await shell.openPath(tempFile);
-    return { ok: !error, error: error || null };
-  } catch (error) {
-    if (tempFile) { try { fs.rmSync(tempFile, { force: true }); } catch (_) {} }
-    return { error: error.message };
-  }
-});
-ipcMain.handle('nexus:export-file', async (_event, id) => {
-  try {
-    const state = requireUnlocked(), file = findFile(id);
-    const result = await dialog.showSaveDialog(win, { title: 'Export an unencrypted copy', defaultPath: file.name });
-    if (result.canceled || !result.filePath) return { canceled: true };
-    await decryptBlobToFile(path.join(state.path, OBJECTS_DIR, file.blobId + '.nxb'), result.filePath, state.key);
-    return { ok: true, path: result.filePath };
-  } catch (error) { return { error: error.message }; }
+ipcMain.handle('nexus:preview-file', (_event, id) => {
+  try { return previewFile(id); } catch (error) { return { error: error.message }; }
 });

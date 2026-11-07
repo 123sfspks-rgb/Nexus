@@ -6,7 +6,7 @@
   <p id="lock-description">Your files are encrypted. Enter your vault password to unlock them.</p>
   <div id="unlock-panel" class="auth-form hidden"><label for="unlock-password">VAULT PASSWORD</label><input id="unlock-password" type="password" autocomplete="current-password" placeholder="Enter your password"><button id="unlock-button" class="primary">UNLOCK VAULT <span>→</span></button><div id="unlock-error" class="error"></div></div>
   <div id="no-vault-panel" class="auth-actions hidden"><button id="locate-button" class="primary">LOCATE EXISTING VAULT</button><button id="create-button" class="secondary">CREATE ENCRYPTED VAULT</button></div>
-  <div id="create-panel" class="auth-form hidden"><div class="selected-location" id="selected-location"></div><label for="new-password">CREATE PASSWORD</label><input id="new-password" type="password" autocomplete="new-password" placeholder="At least 10 characters"><label for="confirm-password">CONFIRM PASSWORD</label><input id="confirm-password" type="password" autocomplete="new-password" placeholder="Enter it again"><button id="create-vault-button" class="primary">CREATE VAULT <span>→</span></button><div class="warning">There is no password reset. If the password is lost, the encrypted files cannot be recovered.</div><div id="create-error" class="error"></div></div>
+  <div id="create-panel" class="auth-form hidden"><div class="selected-location" id="selected-location"></div><label for="new-password">CREATE PASSWORD</label><input id="new-password" type="password" autocomplete="new-password" placeholder="At least 10 characters"><label for="confirm-password">CONFIRM PASSWORD</label><input id="confirm-password" type="password" autocomplete="new-password" placeholder="Enter it again"><button id="create-vault-button" class="primary">CREATE VAULT <span>→</span></button><div class="warning">No password reset exists. If the password is lost, the files cannot be recovered. For a NEXUS-only USB, use an empty drive and keep only NEXUS.exe outside the encrypted vault. Anything else left outside it remains readable.</div><div id="create-error" class="error"></div></div>
   <div class="lock-footer"><span class="status-dot"></span><span id="lock-status">LOCAL ENCRYPTED STORAGE</span></div>
 </div></div>
 <div id="vault-app" class="app hidden">
@@ -15,8 +15,12 @@
     <div class="toolbar"><div id="breadcrumbs" class="breadcrumbs"></div><div class="tools"><button id="up-button" class="tool-button" title="Go up" disabled>↑</button><button id="refresh-button" class="tool-button" title="Refresh">↻</button><input id="search" class="search" type="search" placeholder="Search this folder…"></div></div>
     <section class="content"><div class="content-heading"><div><div class="eyebrow">ENCRYPTED CONTENT</div><h2 id="folder-title">Vault root</h2></div><div class="heading-actions"><span id="item-count" class="item-count"></span><button id="new-folder-button" class="secondary compact">＋ NEW FOLDER</button></div></div>
       <div class="file-area"><div class="list-header"><span>NAME</span><span>TYPE</span><span>DATE MODIFIED</span><span>SIZE</span></div><div id="file-list"></div><div id="empty-state" class="empty-state hidden">This folder is empty. Import files to add them to your encrypted vault.</div></div>
-      <div class="session-note">Files are encrypted on the USB while locked. Opening a file in another app creates a temporary decrypted session copy. Exported files are ordinary, unencrypted copies.</div>
-    </section><footer><span>NEXUS <b>2.0 VAULT</b></span><span>YOUR FILES · YOUR DEVICE · YOUR KEY</span></footer>
+      <div class="session-note">Files are encrypted on the USB. NEXUS previews supported formats inside the app using in-memory decryption; it does not create temporary plaintext files or launch external applications. Unsupported formats remain encrypted.</div>
+    </section><footer><span>NEXUS <b>ENCRYPTED VAULT</b></span><span>YOUR FILES · YOUR DEVICE · YOUR KEY</span></footer>
   </main>
+</div>
+<div id="viewer" class="viewer hidden" role="dialog" aria-modal="true" aria-label="NEXUS file preview">
+  <header class="viewer-header"><div><div class="eyebrow">PRIVATE PREVIEW / NEXUS ONLY</div><h2 id="viewer-title">Preview</h2></div><button id="viewer-close" class="secondary compact">CLOSE</button></header>
+  <div id="viewer-content" class="viewer-content"></div>
 </div>
 <script src="./renderer.js"></script></body></html>
