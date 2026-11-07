@@ -1,37 +1,47 @@
 # NEXUS
 
-NEXUS is a Windows application for an encrypted USB vault. Imported files are encrypted on the USB and can only be listed or previewed through NEXUS after the correct password is entered.
+NEXUS is a Windows application for an encrypted USB vault with automatic one-way PC-folder sync.
 
-## What is protected
+## Encryption and access
 
-- Each imported file is encrypted with AES-256-GCM.
-- File names, folder names, and the folder structure are stored in an encrypted manifest.
+- Files copied into the vault are encrypted with AES-256-GCM.
+- File names, folder names, folder structure, and configured sync-folder paths are stored in an encrypted manifest.
 - The password is never saved. NEXUS derives the encryption key using scrypt.
 - The vault is not mounted as a Windows drive. NEXUS does not expose a decrypted folder to File Explorer.
 - Supported previews (text, common images, PDF, audio, and video) are decrypted in memory and displayed inside NEXUS. NEXUS does not launch another application or write a plaintext preview file to disk.
-- Locking NEXUS, removing the USB, or suspending the PC clears the active key from the app session and closes the preview. Memory clearing is best-effort; no software can promise forensic erasure of RAM.
+- Locking NEXUS, removing the USB, or suspending the PC stops sync and clears the active key from the app session. Memory clearing is best-effort, not a forensic-erasure guarantee.
 
-## Make the USB NEXUS-only
+## Set up the USB
 
-1. Back up anything currently on the USB. Creating a vault does not encrypt files already sitting outside it.
-2. For the cleanest setup, use an empty or newly formatted USB drive. Put `NEXUS.exe` at the drive root.
-3. Start NEXUS and choose **Create encrypted vault**. Select the USB drive root and set a strong password.
-4. Import your files from the PC or another backup location into NEXUS.
-5. Keep personal files inside the vault. Do not leave ordinary copies elsewhere on the USB. The only intended item outside the vault is `NEXUS.exe` (plus any auto-run configuration you create yourself).
-6. Test by locking NEXUS and checking the USB in File Explorer. The vault data is encrypted; file names and contents will not be readable there.
+1. Back up anything currently on the USB. An empty or newly formatted USB is recommended.
+2. Put `NEXUS.exe` at the USB drive root so your own auto-run setup can launch it.
+3. Start NEXUS, choose **Create encrypted vault**, select the USB root, and set a strong password.
+4. Use **SYNC PC FOLDERS** to select one or more folders on your PC. You only need to select each source folder once.
+5. NEXUS immediately syncs the selected folders, including their subfolders. It then watches for changes and performs a fallback scan every 15 seconds while the USB is connected and the vault is unlocked.
+6. Keep personal files inside the encrypted vault. Do not leave ordinary copies beside `NEXUS.exe` on the USB.
 
-**Important:** Import copies files into the vault; it does not delete the original copies. If you import from the USB itself, those original files remain readable outside NEXUS. Do not delete your only originals until you have checked the encrypted copies and made a separate backup. Flash-drive formatting and deletion cannot guarantee that old data is physically unrecoverable, so do not reuse a USB containing sensitive old data as though it were securely wiped.
+The vault folder is marked hidden/system in Windows, but hiding is only cosmetic. The contents remain encrypted even if someone reveals the folder.
 
-## Using NEXUS
+## Automatic sync behaviour
 
-Connect the USB, launch `NEXUS.exe` (or use the auto-run arrangement you configure on your PC), and enter the vault password. Double-click folders to navigate and supported files to preview them inside NEXUS. Right-click files or folders to rename or delete them.
+- New PC files: copied into the vault and encrypted.
+- Changed PC files: the encrypted copy is replaced with a newly encrypted version.
+- Subfolders: included recursively.
+- PC originals: never changed or deleted.
+- Deleted or renamed PC files: the previously synced encrypted copy is retained. A renamed file may appear as a new entry; NEXUS does not silently delete your vault data.
+- USB disconnected or NEXUS locked: syncing pauses. It resumes after reconnecting and unlocking the same vault.
+- Sync is one-way: PC to encrypted USB. Editing files inside NEXUS does not write changes back to the PC source folders.
 
-Unsupported formats and files larger than 32 MB remain encrypted but cannot currently be previewed in the built-in viewer. NEXUS does not automatically export or open them in external applications.
+The sync list is stored inside the encrypted manifest. If the PC source folder is renamed or moved, NEXUS cannot find it automatically; add its new location as another source. Syncing a large folder the first time may take a while.
 
-## Password and recovery
+## Supported previews
 
-There is no password reset or recovery key. Losing the password means losing access to the vault. Keep a separate secure backup of important data and the password.
+NEXUS currently previews text formats, common images, PDF, audio, and video files up to 32 MB. Other files are still encrypted and stored, but cannot yet be previewed inside NEXUS. NEXUS does not open them in external applications or export plaintext copies.
 
-## Auto-run
+## Important safety and recovery notes
 
-USB auto-run is not configured by NEXUS. Set up the launch behaviour separately on the Windows PCs you control.
+- Import and sync create encrypted copies. They do not remove the original PC files.
+- Do not delete your only source copies until you have checked the vault and made a separate backup.
+- There is no password reset or recovery key. Losing the password means losing access to the vault.
+- USB auto-run is configured separately by you; NEXUS does not install or change your auto-run configuration.
+- This is application-level encrypted storage, not a Windows device driver. The USB drive itself remains visible to Windows, and any ordinary files outside `NEXUS_VAULT` remain readable.

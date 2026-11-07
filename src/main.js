@@ -17,6 +17,13 @@ let win = null;
 let pendingVaultPath = null;
 let unlocked = null;
 let isLocking = false;
+let syncInterval = null;
+let syncDebounce = null;
+let syncWatchers = [];
+let syncRunning = false;
+let syncQueued = false;
+let syncStats = { lastSyncAt: null, added: 0, updated: 0, failed: 0, sources: 0 };
+
 
 function isInside(parent, candidate) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate));
@@ -77,12 +84,15 @@ function writeManifest() {
   fs.renameSync(temp, path.join(state.path, MANIFEST_FILE));
 }
 function setUnlocked(folder, key, manifest) {
+  if (!Array.isArray(manifest.syncSources)) manifest.syncSources = [];
   unlocked = { path: folder, key, manifest };
   pendingVaultPath = folder;
+  startSyncMonitoring();
 }
 function clearUnlocked() {
   if (isLocking) return;
   isLocking = true;
+  stopSyncMonitoring();
   if (unlocked && unlocked.key) unlocked.key.fill(0);
   unlocked = null;
   if (win && !win.isDestroyed()) win.webContents.send('nexus:force-lock');
@@ -224,6 +234,250 @@ async function importSelectedItems(parentId) {
   writeManifest();
   return { ok: true, ...counts };
 }
+
+function currentSyncStatus() {
+  return {
+    ...syncStats,
+    sources: unlocked ? (unlocked.manifest.syncSources || []).length : 0,
+    active: Boolean(unlocked),
+    running: syncRunning
+  };
+}
+function publishSyncStatus() {
+  if (win && !win.isDestroyed()) win.webContents.send('nexus:sync-status', currentSyncStatus());
+}
+function stopSyncMonitoring() {
+  if (syncInterval) clearInterval(syncInterval);
+  if (syncDebounce) clearTimeout(syncDebounce);
+  syncInterval = null;
+  syncDebounce = null;
+  for (const watcher of syncWatchers) {
+    try { watcher.close(); } catch (_) {}
+  }
+  syncWatchers = [];
+  syncQueued = false;
+  publishSyncStatus();
+}
+function scheduleSync(delay = 900) {
+  if (!unlocked) return;
+  if (syncDebounce) clearTimeout(syncDebounce);
+  syncDebounce = setTimeout(() => {
+    syncDebounce = null;
+    runSyncNow().catch(error => {
+      syncStats.failed++;
+      publishSyncStatus();
+      console.error('NEXUS sync failed:', error);
+    });
+  }, delay);
+}
+function startSyncMonitoring() {
+  stopSyncMonitoring();
+  if (!unlocked) return;
+  for (const source of unlocked.manifest.syncSources || []) {
+    try {
+      if (fs.existsSync(source.path)) {
+        const watcher = fs.watch(source.path, { recursive: true }, () => scheduleSync());
+        watcher.on('error', () => scheduleSync());
+        syncWatchers.push(watcher);
+      }
+    } catch (_) {
+      // The polling pass below remains as a fallback if Windows cannot watch this path.
+    }
+  }
+  syncInterval = setInterval(() => scheduleSync(250), 15000);
+  publishSyncStatus();
+  scheduleSync(1200);
+}
+function findSyncedFile(sourceId, relativePath) {
+  return unlocked.manifest.files.find(item =>
+    item.syncSourceId === sourceId && item.syncRelativePath === relativePath
+  );
+}
+function ensureSyncedFolder(source, relativePath, parentId, name, counts) {
+  const state = requireUnlocked();
+  let folder = state.manifest.folders.find(item =>
+    item.syncSourceId === source.id && item.syncRelativePath === relativePath
+  );
+  if (!folder) {
+    folder = {
+      id: crypto.randomUUID(),
+      name: uniqueName(parentId, cleanDisplayName(name), 'folder'),
+      parentId,
+      modified: new Date().toISOString(),
+      syncSourceId: source.id,
+      syncRelativePath: relativePath
+    };
+    state.manifest.folders.push(folder);
+    counts.folders++;
+  }
+  return folder;
+}
+async function syncOneFile(source, fullPath, relativePath, parentId, counts) {
+  const state = requireUnlocked();
+  const before = await fs.promises.stat(fullPath);
+  if (!before.isFile()) return;
+  const existing = findSyncedFile(source.id, relativePath);
+  if (existing && existing.size === before.size && existing.sourceMtimeMs === before.mtimeMs) return;
+
+  const blobId = crypto.randomUUID();
+  const finalPath = path.join(state.path, OBJECTS_DIR, blobId + '.nxb');
+  const tempPath = finalPath + '.tmp';
+  try {
+    await encryptFileToBlob(fullPath, tempPath, state.key);
+    const after = await fs.promises.stat(fullPath);
+    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+      try { fs.rmSync(tempPath, { force: true }); } catch (_) {}
+      return;
+    }
+    requireUnlocked();
+    fs.renameSync(tempPath, finalPath);
+    const previousBlob = existing ? existing.blobId : null;
+    if (existing) {
+      existing.blobId = blobId;
+      existing.size = after.size;
+      existing.modified = after.mtime.toISOString();
+      existing.sourceMtimeMs = after.mtimeMs;
+      existing.name = cleanDisplayName(path.basename(fullPath));
+      counts.updated++;
+    } else {
+      state.manifest.files.push({
+        id: crypto.randomUUID(),
+        name: uniqueName(parentId, cleanDisplayName(path.basename(fullPath)), 'file'),
+        parentId,
+        blobId,
+        size: after.size,
+        modified: after.mtime.toISOString(),
+        syncSourceId: source.id,
+        syncRelativePath: relativePath,
+        sourceMtimeMs: after.mtimeMs
+      });
+      counts.added++;
+    }
+    try {
+      writeManifest();
+      if (previousBlob) {
+        try { fs.rmSync(path.join(state.path, OBJECTS_DIR, previousBlob + '.nxb'), { force: true }); } catch (_) {}
+      }
+    } catch (error) {
+      if (existing) {
+        // Keep the previous encrypted object reference if the manifest could not be saved.
+        existing.blobId = previousBlob;
+      } else {
+        state.manifest.files = state.manifest.files.filter(item => item.blobId !== blobId);
+      }
+      try { fs.rmSync(finalPath, { force: true }); } catch (_) {}
+      throw error;
+    }
+  } catch (error) {
+    try { fs.rmSync(tempPath, { force: true }); } catch (_) {}
+    throw error;
+  }
+}
+async function syncOneSource(source, counts) {
+  const state = requireUnlocked();
+  const root = path.resolve(source.path);
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    counts.failed++;
+    return;
+  }
+  if (isInside(state.path, root)) {
+    counts.failed++;
+    return;
+  }
+  const rootName = cleanDisplayName(path.basename(root) || source.label || 'Synced folder');
+  const rootFolder = ensureSyncedFolder(source, '', null, rootName, counts);
+
+  async function walk(directory, relativeDirectory, parentId) {
+    if (!unlocked || unlocked !== state || !fs.existsSync(state.path)) return;
+    let entries;
+    try {
+      entries = await fs.promises.readdir(directory, { withFileTypes: true });
+    } catch (_) {
+      counts.failed++;
+      return;
+    }
+    for (const entry of entries) {
+      if (!unlocked || unlocked !== state) return;
+      const fullPath = path.join(directory, entry.name);
+      if (isInside(state.path, fullPath)) continue;
+      let stat;
+      try { stat = await fs.promises.lstat(fullPath); } catch (_) { counts.failed++; continue; }
+      if (stat.isSymbolicLink()) continue;
+      const relativePath = relativeDirectory
+        ? path.posix.join(relativeDirectory, entry.name)
+        : entry.name;
+      if (stat.isDirectory()) {
+        const folder = ensureSyncedFolder(source, relativePath, parentId, entry.name, counts);
+        await walk(fullPath, relativePath, folder.id);
+      } else if (stat.isFile()) {
+        try { await syncOneFile(source, fullPath, relativePath, parentId, counts); }
+        catch (error) { counts.failed++; console.error('NEXUS could not sync', fullPath, error); }
+      }
+    }
+  }
+  await walk(root, '', rootFolder.id);
+}
+async function runSyncNow() {
+  if (!unlocked) return { error: 'Unlock the NEXUS vault before syncing.' };
+  if (syncRunning) {
+    syncQueued = true;
+    return { ok: true, queued: true, ...currentSyncStatus() };
+  }
+  syncRunning = true;
+  const counts = { added: 0, updated: 0, failed: 0, folders: 0 };
+  try {
+    const sources = [...(unlocked.manifest.syncSources || [])];
+    for (const source of sources) {
+      if (!unlocked) break;
+      await syncOneSource(source, counts);
+    }
+    if (unlocked && counts.folders) writeManifest();
+    syncStats = {
+      lastSyncAt: new Date().toISOString(),
+      added: counts.added,
+      updated: counts.updated,
+      failed: counts.failed,
+      sources: sources.length
+    };
+  } finally {
+    syncRunning = false;
+    publishSyncStatus();
+    if (syncQueued && unlocked) {
+      syncQueued = false;
+      scheduleSync(500);
+    }
+  }
+  return { ok: true, ...currentSyncStatus() };
+}
+async function addSyncFolders() {
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Choose PC folders to sync into the encrypted NEXUS USB',
+    properties: ['openDirectory', 'multiSelections']
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  const state = requireUnlocked();
+  const existing = new Set((state.manifest.syncSources || []).map(item => path.resolve(item.path).toLowerCase()));
+  let added = 0;
+  for (const folderPath of result.filePaths) {
+    const absolute = path.resolve(folderPath);
+    if (!fs.existsSync(absolute) || !fs.statSync(absolute).isDirectory()) continue;
+    if (isInside(state.path, absolute)) continue;
+    const key = absolute.toLowerCase();
+    if (existing.has(key)) continue;
+    state.manifest.syncSources.push({
+      id: crypto.randomUUID(),
+      path: absolute,
+      label: path.basename(absolute) || absolute,
+      addedAt: new Date().toISOString()
+    });
+    existing.add(key);
+    added++;
+  }
+  writeManifest();
+  startSyncMonitoring();
+  const resultSync = await runSyncNow();
+  return { ok: true, added, ...resultSync };
+}
 function findFile(id) {
   const state = requireUnlocked();
   const file = state.manifest.files.find(item => item.id === id);
@@ -326,6 +580,9 @@ ipcMain.handle('nexus:unlock', (_event, password) => {
 ipcMain.handle('nexus:lock', () => { clearUnlocked(); return { ok: true }; });
 ipcMain.handle('nexus:list', (_event, folderId) => { try { return listFolder(folderId); } catch (error) { return { error: error.message }; } });
 ipcMain.handle('nexus:import', async (_event, parentId) => { try { return await importSelectedItems(parentId); } catch (error) { return { error: error.message }; } });
+ipcMain.handle('nexus:add-sync-folders', async () => { try { return await addSyncFolders(); } catch (error) { return { error: error.message }; } });
+ipcMain.handle('nexus:sync-now', async () => { try { return await runSyncNow(); } catch (error) { return { error: error.message }; } });
+ipcMain.handle('nexus:sync-status', () => currentSyncStatus());
 ipcMain.handle('nexus:new-folder', (_event, name, parentId) => {
   try {
     const state = requireUnlocked();

@@ -3,6 +3,7 @@ let currentEntries = [];
 let selectedItem = null;
 let vaultPath = null;
 let activeObjectUrl = null;
+let syncStatus = null;
 const $ = id => document.getElementById(id);
 
 function showLock(message) {
@@ -149,6 +150,37 @@ function closeViewer() {
   }
 }
 
+
+function renderSyncStatus(status) {
+  syncStatus = status;
+  const count = status && Number(status.sources || 0);
+  const label = $('sync-status');
+  if (!label) return;
+  if (!status || !status.active) label.textContent = 'SYNC PAUSED';
+  else if (!count) label.textContent = 'NO PC FOLDERS SYNCED';
+  else if (status.running) label.textContent = 'SYNCING ' + count + ' FOLDER' + (count === 1 ? '' : 'S');
+  else label.textContent = 'AUTO-SYNC ON · ' + count + ' FOLDER' + (count === 1 ? '' : 'S');
+  if (status && status.lastSyncAt) {
+    label.title = 'Last sync: ' + new Date(status.lastSyncAt).toLocaleString() +
+      ' · Added ' + (status.added || 0) + ' · Updated ' + (status.updated || 0) +
+      ' · Errors ' + (status.failed || 0);
+  } else {
+    label.title = 'Choose PC folders to keep encrypted copies synced to this USB.';
+  }
+}
+async function setupSyncFolders() {
+  const result = await window.nexus.addSyncFolders();
+  if (result.error) { alert(result.error); return; }
+  if (result.canceled) return;
+  renderSyncStatus(await window.nexus.syncStatus());
+  if (result.added) {
+    alert('NEXUS is now syncing ' + result.added + ' new PC folder' +
+      (result.added === 1 ? '' : 's') + '. It will keep checking for new and changed files while the USB is connected and the vault is unlocked.');
+  } else {
+    alert('Those folders were already in your NEXUS sync list. NEXUS has checked them again.');
+  }
+}
+
 async function createVault() {
   const password = $('new-password').value, confirmPassword = $('confirm-password').value;
   if (password.length < 10) { $('create-error').textContent = 'Use at least 10 characters.'; return; }
@@ -187,6 +219,14 @@ $('up-button').addEventListener('click', async () => {
 });
 $('refresh-button').addEventListener('click', refreshFolder);
 $('search').addEventListener('input', () => drawEntries(currentEntries.filter(item => item.name.toLowerCase().includes($('search').value.toLowerCase()))));
+$('sync-folders-button').addEventListener('click', setupSyncFolders);
+$('sync-now-button').addEventListener('click', async () => {
+  const result = await window.nexus.syncNow();
+  if (result.error) alert(result.error);
+  renderSyncStatus(await window.nexus.syncStatus());
+});
+window.nexus.onSyncStatus(renderSyncStatus);
+window.nexus.syncStatus().then(renderSyncStatus);
 $('import-button').addEventListener('click', async () => {
   const result = await window.nexus.importItems(currentFolderId);
   if (result.error) { alert(result.error); return; }
