@@ -3,33 +3,31 @@
 A local-first Windows workspace with a native PowerShell terminal.
 
 ## Features
-- Desktop window; no browser tab or web hosting.
+- Standalone Electron desktop window; no browser tab or web hosting.
 - Real PowerShell session through `node-pty` on Windows.
-- Local folder listing and opening files with their default Windows apps.
+- Local file explorer with a native folder picker.
+- Open files and folders with their default Windows applications.
 - xterm.js terminal interface.
 - No account, cloud service, or network connection required at runtime.
 
-## Requirements
-- Windows 10/11, 64-bit
-- Node.js LTS and npm
-- C++ Build Tools / Python may be needed by node-pty when installing native dependencies.
-
-## Run from source
-```powershell
-npm install
-npm start
-```
-
 ## Build a portable Windows executable
-Run this on a Windows computer:
+
+The repository includes a GitHub Actions workflow. Open the **Actions** tab and run **Build NEXUS for Windows** (or push a source change). When it finishes, open the workflow run and download the `NEXUS-Windows-Portable` artifact.
+
+To build locally on Windows 10/11:
 ```powershell
 npm install
 npm run dist:win
 ```
-The portable executable will be created in `dist\`.
+The executable is created in `dist\`.
 
-## Important
-The terminal runs commands as the currently signed-in Windows user. It is not a sandbox or security boundary. Only run commands you understand. The portable executable does not bundle a complete Node.js development toolchain or Python; those tools must already be installed on the computer if you want to use them in the terminal.
+## Requirements and limitations
+- Windows 10/11, 64-bit.
+- The build uses Electron and node-pty. Native dependency installation may require Windows build tools if building locally.
+- The terminal runs commands as the currently signed-in Windows user. It is not a sandbox or security boundary. Only run commands you understand.
+- Python, Git and other command-line tools must already be installed on the computer if you want to use them in the terminal.
+- The portable app does not bundle a full Python/Git toolchain.
+- Electron portable builds may use temporary/runtime files in the Windows user profile; the application executable itself can be stored on a USB drive.
 
 ## USB use
-Copy the built `NEXUS-1.0.0-Windows-Portable.exe` to your USB drive. Keep the NEXUS project folder and your own workspace folders alongside it. A portable Electron app may still write temporary/runtime data to the Windows user profile.
+Copy the downloaded portable executable to your USB drive. Keep your NEXUS folders alongside it. On first launch, the app uses the portable executable's directory as its initial workspace. You can choose another folder from File Explorer inside NEXUS.
