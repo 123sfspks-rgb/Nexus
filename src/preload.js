@@ -13,7 +13,5 @@ contextBridge.exposeInMainWorld('nexus', {
   deleteItem: (id, isFolder) => ipcRenderer.invoke('nexus:delete', id, isFolder),
   openFile: id => ipcRenderer.invoke('nexus:open-file', id),
   exportFile: id => ipcRenderer.invoke('nexus:export-file', id),
-  autoLaunch: enabled => ipcRenderer.invoke('nexus:auto-launch', enabled),
-  closeWindow: () => ipcRenderer.invoke('nexus:close-window'),
   onForceLock: callback => ipcRenderer.on('nexus:force-lock', callback)
 });
