@@ -1,33 +1,28 @@
-# NEXUS Desktop
+# NEXUS
 
-A local-first Windows workspace with a native PowerShell terminal.
+NEXUS is a simple portable Windows desktop file manager. It opens in its own app window — no Chrome, no browser tab, and no terminal.
 
-## Features
-- Standalone Electron desktop window; no browser tab or web hosting.
-- Real PowerShell session through `node-pty` on Windows.
-- Local file explorer with a native folder picker.
-- Open files and folders with their default Windows applications.
-- xterm.js terminal interface.
-- No account, cloud service, or network connection required at runtime.
+## What it does
+- Browse folders and drives from one interface.
+- Double-click folders to move into them.
+- Use Back and Up to navigate.
+- Double-click files to open them in their normal Windows applications.
+- Search the current folder.
+- Choose any folder using the native Windows folder picker.
+- Browse available drive letters, including a USB drive.
 
-## Build a portable Windows executable
+## Windows portable build
+The GitHub Actions workflow builds a portable Windows executable.
 
-The repository includes a GitHub Actions workflow. Open the **Actions** tab and run **Build NEXUS for Windows** (or push a source change). When it finishes, open the workflow run and download the `NEXUS-Windows-Portable` artifact.
+1. Open the repository's **Actions** tab.
+2. Select **Build NEXUS for Windows**.
+3. Wait for the run to finish successfully.
+4. Open the run and download the **NEXUS-Windows-Portable** artifact.
+5. Copy the executable to your USB drive and double-click it.
 
-To build locally on Windows 10/11:
-```powershell
-npm install
-npm run dist:win
-```
-The executable is created in `dist\`.
-
-## Requirements and limitations
-- Windows 10/11, 64-bit.
-- The build uses Electron and node-pty. Native dependency installation may require Windows build tools if building locally.
-- The terminal runs commands as the currently signed-in Windows user. It is not a sandbox or security boundary. Only run commands you understand.
-- Python, Git and other command-line tools must already be installed on the computer if you want to use them in the terminal.
-- The portable app does not bundle a full Python/Git toolchain.
-- Electron portable builds may use temporary/runtime files in the Windows user profile; the application executable itself can be stored on a USB drive.
-
-## USB use
-Copy the downloaded portable executable to your USB drive. Keep your NEXUS folders alongside it. On first launch, the app uses the portable executable's directory as its initial workspace. You can choose another folder from File Explorer inside NEXUS.
+## Notes
+- Designed for Windows 10/11 64-bit.
+- NEXUS is a file manager, not a replacement for Windows or for the applications that open your files.
+- Files open using the programs already installed on the computer.
+- The app does not upload or sync your files.
+- The portable executable can be stored on a USB drive. Some Electron runtime data may still be stored in the Windows user profile.
