@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -6,7 +6,7 @@ const pty = require('node-pty');
 
 let win;
 let terminal = null;
-let workspace = process.env.NEXUS_HOME || process.cwd();
+let workspace = process.env.NEXUS_HOME || (process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(process.execPath) : process.cwd()));
 
 function createWindow() {
   win = new BrowserWindow({
@@ -40,10 +40,10 @@ ipcMain.handle('workspace:list', () => {
   } catch (e) { return { error: e.message }; }
 });
 
-ipcMain.handle('workspace:set', (_event, folder) => {
-  const next = path.resolve(String(folder || ''));
-  if (!fs.existsSync(next) || !fs.statSync(next).isDirectory()) return { error: 'Folder not found.' };
-  workspace = next;
+ipcMain.handle('workspace:choose', async () => {
+  const result = await dialog.showOpenDialog(win, { title: 'Choose NEXUS workspace', defaultPath: workspace, properties: ['openDirectory'] });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+  workspace = result.filePaths[0];
   if (terminal) terminal.kill();
   terminal = null;
   return { cwd: workspace };
