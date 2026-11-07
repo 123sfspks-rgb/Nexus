@@ -1,46 +1,54 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NEXUS</title>
-<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<div class="scanlines"></div>
-<aside class="sidebar">
-  <div class="brand"><span class="brand-mark">N</span><div><b>NEXUS</b><small>PORTABLE WORKSPACE</small></div></div>
-  <div class="side-label">WORKSPACE</div>
-  <button class="nav active" data-view="overview"><span>◈</span> Overview</button>
-  <button class="nav" data-view="terminal"><span>⌘</span> Terminal</button>
-  <button class="nav" data-view="files"><span>▤</span> File explorer</button>
-  <div class="side-bottom"><div class="status-dot"></div><span>LOCAL SYSTEM</span><small>NO CLOUD REQUIRED</small></div>
-</aside>
-<main>
-  <header><div><span class="eyebrow">SYSTEM / <span id="current-section">OVERVIEW</span></span><h1 id="page-title">Command centre</h1></div><div class="header-right"><span class="live"><i></i> SYSTEM ONLINE</span><span class="user-chip">T</span></div></header>
-  <section id="overview" class="view">
-    <div class="hero"><div class="hero-copy"><div class="eyebrow">PERSONAL ENVIRONMENT · 001</div><h2>Welcome back,<br><em>Tawsif.</em></h2><p>Your workspace. Your machine. Your rules.</p><button class="primary" data-go="terminal">OPEN TERMINAL <span>↗</span></button></div><div class="orb"><div class="orb-core">N</div></div><div class="hero-grid"></div></div>
-    <div class="section-head"><div><span class="eyebrow">LIVE ENVIRONMENT</span><h3>System overview</h3></div><span class="subtle">RUNNING LOCALLY</span></div>
-    <div class="stat-grid">
-      <article class="stat"><span>HOST DEVICE</span><b id="hostname">Loading…</b><small id="platform">Detecting platform</small></article>
-      <article class="stat"><span>ACTIVE USER</span><b id="username">Loading…</b><small>Local account</small></article>
-      <article class="stat"><span>WORKSPACE PATH</span><b id="cwd" class="path-value">Loading…</b><small>Current working directory</small></article>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-icon">N</div><div><b>NEXUS</b><small>YOUR FILE SPACE</small></div></div>
+    <div class="side-heading">LIBRARY</div>
+    <button class="side-link selected" id="home-button"><span class="side-icon">⌂</span> Home</button>
+    <button class="side-link" id="all-files-button"><span class="side-icon">▤</span> All files</button>
+    <div class="side-heading drives-heading">DRIVES</div>
+    <div id="drive-list" class="drive-list"></div>
+    <div class="sidebar-bottom"><span class="online-dot"></span> LOCAL · PRIVATE<br><small>FILES STAY ON YOUR DEVICE</small></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><div class="overline">NEXUS / FILE MANAGER</div><h1 id="page-title">Home</h1></div>
+      <div class="top-actions"><span class="local-tag"><i></i> LOCAL STORAGE</span><button id="open-folder" class="open-button">＋ &nbsp; Open folder</button></div>
+    </header>
+
+    <section class="welcome" id="welcome">
+      <div class="welcome-copy"><div class="overline">WELCOME TO YOUR SPACE</div><h2>Everything,<br><em>in one place.</em></h2><p>Browse your USB, open folders and launch files — all from NEXUS.</p><button id="browse-button" class="browse-button">BROWSE FILES <span>→</span></button></div>
+      <div class="welcome-art"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="folder-art"><span>▰</span></div></div>
+    </section>
+
+    <div class="toolbar">
+      <div class="breadcrumbs" id="breadcrumbs"></div>
+      <div class="tools"><button id="back-button" class="tool-button" title="Back" disabled>←</button><button id="up-button" class="tool-button" title="Go up" disabled>↑</button><button id="refresh-button" class="tool-button" title="Refresh">↻</button><input id="search" class="search" type="search" placeholder="Search this folder…"></div>
     </div>
-    <div class="notice"><span>i</span><div><b>LOCAL-FIRST DESIGN</b><p>NEXUS runs on this computer. Terminal commands execute through your system's PowerShell or shell.</p></div></div>
-  </section>
-  <section id="terminal" class="view hidden">
-    <div class="terminal-toolbar"><div><span class="live"><i></i> SESSION ACTIVE</span><span class="subtle" id="shell-label">POWERSHELL</span></div><button id="restart-terminal" class="ghost">RESTART SESSION ↻</button></div>
-    <div class="terminal-frame"><div class="terminal-top"><span class="traffic"><i></i><i></i><i></i></span><span>nexus@local — terminal</span><span class="subtle">256-COLOR</span></div><div id="terminal-root"></div></div>
-    <p class="hint">This is a real local shell. Commands run with the permissions of your Windows user account.</p>
-  </section>
-  <section id="files" class="view hidden">
-    <div class="section-head"><div><span class="eyebrow">LOCAL STORAGE</span><h3>File explorer</h3></div><button id="choose-folder" class="primary">SET WORKSPACE</button></div>
-    <div class="file-path" id="file-path">Loading…</div><div id="file-list" class="file-list"></div>
-    <p class="hint">Select an item to open it with its default Windows application. Use Set Workspace to choose another folder.</p>
-  </section>
-  <footer><span>NEXUS DESKTOP <b>v1.0.0</b></span><span>BUILT FOR LOCAL USE · WINDOWS 10 / 11</span></footer>
-</main>
-<script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
-<script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+
+    <section class="content">
+      <div class="content-heading"><div><span class="overline">YOUR STORAGE</span><h2 id="folder-title">Quick access</h2></div><span id="item-count" class="item-count"></span></div>
+      <div id="quick-access" class="quick-grid">
+        <button class="quick-card" id="usb-card"><span class="quick-symbol usb-symbol">▣</span><b>USB / Current folder</b><small>Open your NEXUS drive</small></button>
+        <button class="quick-card" id="computer-card"><span class="quick-symbol pc-symbol">▤</span><b>This PC</b><small>Browse available drives</small></button>
+      </div>
+      <div id="file-area" class="file-area hidden">
+        <div class="list-header"><span>NAME</span><span>TYPE</span><span>DATE MODIFIED</span><span>SIZE</span></div>
+        <div id="file-list"></div>
+        <div id="empty-state" class="empty-state hidden">This folder is empty.</div>
+      </div>
+    </section>
+    <footer><span>NEXUS <b>1.1</b></span><span>MADE FOR YOUR USB WORKSPACE</span></footer>
+  </main>
+</div>
 <script src="./renderer.js"></script>
-</body></html>
+</body>
+</html>
