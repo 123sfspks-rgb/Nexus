@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXUS</title>
+<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="scanlines"></div>
+<aside class="sidebar">
+  <div class="brand"><span class="brand-mark">N</span><div><b>NEXUS</b><small>PORTABLE WORKSPACE</small></div></div>
+  <div class="side-label">WORKSPACE</div>
+  <button class="nav active" data-view="overview"><span>◈</span> Overview</button>
+  <button class="nav" data-view="terminal"><span>⌘</span> Terminal</button>
+  <button class="nav" data-view="files"><span>▤</span> File explorer</button>
+  <div class="side-bottom"><div class="status-dot"></div><span>LOCAL SYSTEM</span><small>NO CLOUD REQUIRED</small></div>
+</aside>
+<main>
+  <header><div><span class="eyebrow">SYSTEM / <span id="current-section">OVERVIEW</span></span><h1 id="page-title">Command centre</h1></div><div class="header-right"><span class="live"><i></i> SYSTEM ONLINE</span><span class="user-chip">T</span></div></header>
+  <section id="overview" class="view">
+    <div class="hero"><div class="hero-copy"><div class="eyebrow">PERSONAL ENVIRONMENT · 001</div><h2>Welcome back,<br><em>Tawsif.</em></h2><p>Your workspace. Your machine. Your rules.</p><button class="primary" data-go="terminal">OPEN TERMINAL <span>↗</span></button></div><div class="orb"><div class="orb-core">N</div></div><div class="hero-grid"></div></div>
+    <div class="section-head"><div><span class="eyebrow">LIVE ENVIRONMENT</span><h3>System overview</h3></div><span class="subtle">RUNNING LOCALLY</span></div>
+    <div class="stat-grid">
+      <article class="stat"><span>HOST DEVICE</span><b id="hostname">Loading…</b><small id="platform">Detecting platform</small></article>
+      <article class="stat"><span>ACTIVE USER</span><b id="username">Loading…</b><small>Local account</small></article>
+      <article class="stat"><span>WORKSPACE PATH</span><b id="cwd" class="path-value">Loading…</b><small>Current working directory</small></article>
+    </div>
+    <div class="notice"><span>i</span><div><b>LOCAL-FIRST DESIGN</b><p>NEXUS runs on this computer. Terminal commands execute through your system's PowerShell or shell.</p></div></div>
+  </section>
+  <section id="terminal" class="view hidden">
+    <div class="terminal-toolbar"><div><span class="live"><i></i> SESSION ACTIVE</span><span class="subtle" id="shell-label">POWERSHELL</span></div><button id="restart-terminal" class="ghost">RESTART SESSION ↻</button></div>
+    <div class="terminal-frame"><div class="terminal-top"><span class="traffic"><i></i><i></i><i></i></span><span>nexus@local — terminal</span><span class="subtle">256-COLOR</span></div><div id="terminal-root"></div></div>
+    <p class="hint">This is a real local shell. Commands run with the permissions of your Windows user account.</p>
+  </section>
+  <section id="files" class="view hidden">
+    <div class="section-head"><div><span class="eyebrow">LOCAL STORAGE</span><h3>File explorer</h3></div><button id="choose-folder" class="primary">SET WORKSPACE</button></div>
+    <div class="file-path" id="file-path">Loading…</div><div id="file-list" class="file-list"></div>
+    <p class="hint">Select an item to open it with its default Windows application. Use Set Workspace to choose another folder.</p>
+  </section>
+  <footer><span>NEXUS DESKTOP <b>v1.0.0</b></span><span>BUILT FOR LOCAL USE · WINDOWS 10 / 11</span></footer>
+</main>
+<script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="./renderer.js"></script>
+</body></html>
