@@ -1,54 +1,22 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NEXUS</title>
-<link rel="stylesheet" href="./style.css">
-</head>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NEXUS</title><link rel="stylesheet" href="./style.css"></head>
 <body>
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand"><div class="brand-icon">N</div><div><b>NEXUS</b><small>YOUR FILE SPACE</small></div></div>
-    <div class="side-heading">LIBRARY</div>
-    <button class="side-link selected" id="home-button"><span class="side-icon">⌂</span> Home</button>
-    <button class="side-link" id="all-files-button"><span class="side-icon">▤</span> All files</button>
-    <div class="side-heading drives-heading">DRIVES</div>
-    <div id="drive-list" class="drive-list"></div>
-    <div class="sidebar-bottom"><span class="online-dot"></span> LOCAL · PRIVATE<br><small>FILES STAY ON YOUR DEVICE</small></div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
-      <div><div class="overline">NEXUS / FILE MANAGER</div><h1 id="page-title">Home</h1></div>
-      <div class="top-actions"><span class="local-tag"><i></i> LOCAL STORAGE</span><button id="open-folder" class="open-button">＋ &nbsp; Open folder</button></div>
-    </header>
-
-    <section class="welcome" id="welcome">
-      <div class="welcome-copy"><div class="overline">WELCOME TO YOUR SPACE</div><h2>Everything,<br><em>in one place.</em></h2><p>Browse your USB, open folders and launch files — all from NEXUS.</p><button id="browse-button" class="browse-button">BROWSE FILES <span>→</span></button></div>
-      <div class="welcome-art"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="folder-art"><span>▰</span></div></div>
-    </section>
-
-    <div class="toolbar">
-      <div class="breadcrumbs" id="breadcrumbs"></div>
-      <div class="tools"><button id="back-button" class="tool-button" title="Back" disabled>←</button><button id="up-button" class="tool-button" title="Go up" disabled>↑</button><button id="refresh-button" class="tool-button" title="Refresh">↻</button><input id="search" class="search" type="search" placeholder="Search this folder…"></div>
-    </div>
-
-    <section class="content">
-      <div class="content-heading"><div><span class="overline">YOUR STORAGE</span><h2 id="folder-title">Quick access</h2></div><span id="item-count" class="item-count"></span></div>
-      <div id="quick-access" class="quick-grid">
-        <button class="quick-card" id="usb-card"><span class="quick-symbol usb-symbol">▣</span><b>USB / Current folder</b><small>Open your NEXUS drive</small></button>
-        <button class="quick-card" id="computer-card"><span class="quick-symbol pc-symbol">▤</span><b>This PC</b><small>Browse available drives</small></button>
-      </div>
-      <div id="file-area" class="file-area hidden">
-        <div class="list-header"><span>NAME</span><span>TYPE</span><span>DATE MODIFIED</span><span>SIZE</span></div>
-        <div id="file-list"></div>
-        <div id="empty-state" class="empty-state hidden">This folder is empty.</div>
-      </div>
-    </section>
-    <footer><span>NEXUS <b>1.1</b></span><span>MADE FOR YOUR USB WORKSPACE</span></footer>
+<div id="lock-screen" class="lock-screen"><div class="lock-panel">
+  <div class="brand-mark">N</div><div class="eyebrow">PRIVATE USB STORAGE</div><h1>NEXUS<span>.</span></h1>
+  <p id="lock-description">Your files are encrypted. Enter your vault password to unlock them.</p>
+  <div id="unlock-panel" class="auth-form hidden"><label for="unlock-password">VAULT PASSWORD</label><input id="unlock-password" type="password" autocomplete="current-password" placeholder="Enter your password"><button id="unlock-button" class="primary">UNLOCK VAULT <span>→</span></button><div id="unlock-error" class="error"></div></div>
+  <div id="no-vault-panel" class="auth-actions hidden"><button id="locate-button" class="primary">LOCATE EXISTING VAULT</button><button id="create-button" class="secondary">CREATE ENCRYPTED VAULT</button></div>
+  <div id="create-panel" class="auth-form hidden"><div class="selected-location" id="selected-location"></div><label for="new-password">CREATE PASSWORD</label><input id="new-password" type="password" autocomplete="new-password" placeholder="At least 10 characters"><label for="confirm-password">CONFIRM PASSWORD</label><input id="confirm-password" type="password" autocomplete="new-password" placeholder="Enter it again"><button id="create-vault-button" class="primary">CREATE VAULT <span>→</span></button><div class="warning">There is no password reset. If the password is lost, the encrypted files cannot be recovered.</div><div id="create-error" class="error"></div></div>
+  <div class="lock-footer"><span class="status-dot"></span><span id="lock-status">LOCAL ENCRYPTED STORAGE</span></div>
+</div></div>
+<div id="vault-app" class="app hidden">
+  <aside class="sidebar"><div class="brand"><div class="brand-icon">N</div><div><b>NEXUS</b><small>ENCRYPTED VAULT</small></div></div><div class="side-heading">VAULT</div><button class="side-link selected" id="vault-home"><span>▣</span> My files</button><div class="sidebar-note"><span class="status-dot"></span> UNLOCKED SESSION</div><div class="sidebar-bottom"><button id="auto-launch-button" class="side-action">Enable USB auto-launch</button><small id="auto-launch-status">This PC only · setup required</small><button id="lock-button" class="lock-button">LOCK NEXUS</button></div></aside>
+  <main class="main"><header class="topbar"><div><div class="eyebrow">NEXUS / SECURE STORAGE</div><h1>My files</h1></div><div class="top-actions"><span class="secure-tag"><i></i> AES-256-GCM</span><button id="import-button" class="primary compact">＋ IMPORT FILES</button></div></header>
+    <div class="toolbar"><div id="breadcrumbs" class="breadcrumbs"></div><div class="tools"><button id="up-button" class="tool-button" title="Go up" disabled>↑</button><button id="refresh-button" class="tool-button" title="Refresh">↻</button><input id="search" class="search" type="search" placeholder="Search this folder…"></div></div>
+    <section class="content"><div class="content-heading"><div><div class="eyebrow">ENCRYPTED CONTENT</div><h2 id="folder-title">Vault root</h2></div><div class="heading-actions"><span id="item-count" class="item-count"></span><button id="new-folder-button" class="secondary compact">＋ NEW FOLDER</button></div></div>
+      <div class="file-area"><div class="list-header"><span>NAME</span><span>TYPE</span><span>DATE MODIFIED</span><span>SIZE</span></div><div id="file-list"></div><div id="empty-state" class="empty-state hidden">This folder is empty. Import files to add them to your encrypted vault.</div></div>
+      <div class="session-note">Files are encrypted on the USB while locked. Opening a file in another app creates a temporary decrypted session copy. Exported files are ordinary, unencrypted copies.</div>
+    </section><footer><span>NEXUS <b>2.0 VAULT</b></span><span>YOUR FILES · YOUR DEVICE · YOUR KEY</span></footer>
   </main>
 </div>
-<script src="./renderer.js"></script>
-</body>
-</html>
+<script src="./renderer.js"></script></body></html>

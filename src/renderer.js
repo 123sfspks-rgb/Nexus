@@ -1,178 +1,190 @@
-let current = null;
-let history = [];
-let historyIndex = -1;
+let currentFolderId = null;
+let currentEntries = [];
+let selectedItem = null;
+let vaultPath = null;
 const $ = id => document.getElementById(id);
 
-function formatSize(bytes) {
-  if (!bytes) return '—';
-  const units = ['B','KB','MB','GB','TB'];
-  let size = bytes, unit = 0;
-  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++; }
-  return size.toFixed(unit === 0 ? 0 : 1) + ' ' + units[unit];
+function showLock(message) {
+  $('vault-app').classList.add('hidden');
+  $('lock-screen').classList.remove('hidden');
+  $('unlock-panel').classList.add('hidden');
+  $('no-vault-panel').classList.add('hidden');
+  $('create-panel').classList.add('hidden');
+  $('unlock-error').textContent = '';
+  $('create-error').textContent = '';
+  $('lock-description').textContent = message || 'Your files are encrypted. Enter your vault password to unlock them.';
 }
-function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
-  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+function showUnlock() {
+  $('unlock-panel').classList.remove('hidden');
+  $('no-vault-panel').classList.add('hidden');
+  $('create-panel').classList.add('hidden');
+  $('lock-description').textContent = 'Your NEXUS vault was found. Enter the password to decrypt and access your files.';
+  $('lock-status').textContent = 'ENCRYPTED VAULT DETECTED';
 }
-function setActive(buttonId) {
-  document.querySelectorAll('.side-link').forEach(button => button.classList.remove('selected'));
-  if (buttonId) $(buttonId).classList.add('selected');
+function showNoVault() {
+  $('unlock-panel').classList.add('hidden');
+  $('no-vault-panel').classList.remove('hidden');
+  $('create-panel').classList.add('hidden');
+  $('lock-description').textContent = 'Connect the USB containing your vault, locate it, or create a new encrypted vault on a USB drive.';
+  $('lock-status').textContent = 'NO VAULT SELECTED';
 }
-function renderDrives(drives) {
-  const list = $('drive-list');
-  list.innerHTML = '';
-  drives.forEach(drive => {
-    const button = document.createElement('button');
-    button.className = 'drive-link';
-    button.innerHTML = '<span>▣</span><span></span>';
-    button.lastElementChild.textContent = drive.name;
-    button.addEventListener('click', () => navigate(drive.path));
-    list.append(button);
-  });
+async function initialize() {
+  const state = await window.nexus.initial();
+  vaultPath = state.vaultPath;
+  if (state.unlocked) await openVault();
+  else if (vaultPath) showUnlock();
+  else showNoVault();
+  $('auto-launch-status').textContent = state.autoLaunch ? 'Enabled on this PC' : 'This PC only · setup required';
+  $('auto-launch-button').textContent = state.autoLaunch ? 'Disable USB auto-launch' : 'Enable USB auto-launch';
 }
-function renderBreadcrumbs(folderPath) {
-  const bar = $('breadcrumbs');
-  bar.innerHTML = '';
-  const parsed = folderPath.replace(/\\/g, '/');
-  const parts = parsed.split('/').filter(Boolean);
-  let currentPath = folderPath.startsWith('/') ? '/' : '';
-  if (/^[A-Za-z]:/.test(parts[0] || '')) {
-    currentPath = parts[0] + '\\';
-    parts.shift();
-  }
-  const root = document.createElement('button');
-  root.className = 'crumb';
-  root.textContent = 'This PC';
-  root.addEventListener('click', showHome);
-  bar.append(root);
-  parts.forEach((part, index) => {
-    const sep = document.createElement('span'); sep.className = 'crumb-sep'; sep.textContent = '›'; bar.append(sep);
-    currentPath = currentPath === '/' ? '/' + part : currentPath ? currentPath.replace(/[\\/]$/, '') + (currentPath.includes(':') ? '\\' : '/') + part : part;
-    const crumb = document.createElement('button');
-    crumb.className = 'crumb';
-    crumb.textContent = part;
-    const target = index === parts.length - 1 ? folderPath : currentPath;
-    crumb.addEventListener('click', () => navigate(target));
-    bar.append(crumb);
-  });
+async function unlock() {
+  const password = $('unlock-password').value;
+  if (!password) { $('unlock-error').textContent = 'Enter your password.'; return; }
+  $('unlock-button').disabled = true;
+  const result = await window.nexus.unlock(password);
+  $('unlock-button').disabled = false;
+  $('unlock-password').value = '';
+  if (result.error) { $('unlock-error').textContent = result.error; return; }
+  await openVault();
 }
-function renderFolder(data, addHistory = true) {
-  if (!data || data.error) { alert(data?.error || 'Unable to open folder.'); return; }
-  current = data;
-  if (addHistory) {
-    history = history.slice(0, historyIndex + 1);
-    history.push(data.path);
-    historyIndex = history.length - 1;
-  }
-  $('welcome').classList.add('hidden');
-  $('quick-access').classList.add('hidden');
-  $('file-area').classList.remove('hidden');
-  $('page-title').textContent = data.path;
-  $('folder-title').textContent = data.path.split(/[\\/]/).filter(Boolean).pop() || data.path;
+async function openVault(folderId = null) {
+  $('lock-screen').classList.add('hidden');
+  $('vault-app').classList.remove('hidden');
+  currentFolderId = folderId;
+  selectedItem = null;
+  $('search').value = '';
+  await refreshFolder();
+}
+async function refreshFolder() {
+  const data = await window.nexus.list(currentFolderId);
+  if (data.error) { showLock(data.error); return; }
+  currentEntries = data.entries;
+  $('folder-title').textContent = data.breadcrumbs.length ? data.breadcrumbs[data.breadcrumbs.length - 1].name : 'Vault root';
   $('item-count').textContent = data.entries.length + (data.entries.length === 1 ? ' item' : ' items');
-  $('back-button').disabled = historyIndex <= 0;
-  $('up-button').disabled = !data.parent;
-  renderBreadcrumbs(data.path);
-  renderDrives(data.drives || []);
-  drawEntries(data.entries);
+  $('up-button').disabled = !currentFolderId;
+  const bar = $('breadcrumbs'); bar.innerHTML = '';
+  const root = document.createElement('button'); root.className = 'crumb'; root.textContent = 'My files';
+  root.addEventListener('click', () => openVault(null)); bar.append(root);
+  data.breadcrumbs.forEach(folder => {
+    const sep = document.createElement('span'); sep.textContent = '›'; sep.className = 'crumb-sep'; bar.append(sep);
+    const crumb = document.createElement('button'); crumb.className = 'crumb'; crumb.textContent = folder.name;
+    crumb.addEventListener('click', () => openVault(folder.id)); bar.append(crumb);
+  });
+  drawEntries(currentEntries.filter(item => item.name.toLowerCase().includes($('search').value.toLowerCase())));
+}
+function humanSize(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B','KB','MB','GB','TB']; let n = bytes, i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+function humanDate(value) {
+  return value ? new Date(value).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 }
 function drawEntries(entries) {
-  const list = $('file-list');
-  list.innerHTML = '';
+  const list = $('file-list'); list.innerHTML = ''; selectedItem = null;
   $('empty-state').classList.toggle('hidden', entries.length !== 0);
-  entries.forEach(entry => {
-    const row = document.createElement('button');
-    row.className = 'file-row';
+  for (const item of entries) {
+    const row = document.createElement('button'); row.className = 'file-row';
     const name = document.createElement('span'); name.className = 'file-name';
-    const icon = document.createElement('span'); icon.className = entry.directory ? 'item-icon folder-icon' : 'item-icon file-icon';
-    icon.textContent = entry.directory ? '▰' : '▤';
-    const label = document.createElement('span'); label.textContent = entry.name;
-    name.append(icon, label);
-    const type = document.createElement('span'); type.className = 'file-type'; type.textContent = entry.extension;
-    const date = document.createElement('span'); date.className = 'file-date'; date.textContent = formatDate(entry.modified);
-    const size = document.createElement('span'); size.className = 'file-size'; size.textContent = entry.directory ? '—' : formatSize(entry.size);
+    const icon = document.createElement('span'); icon.className = item.directory ? 'item-icon folder-icon' : 'item-icon file-icon'; icon.textContent = item.directory ? '▰' : '▤';
+    const label = document.createElement('span'); label.textContent = item.name; name.append(icon, label);
+    const type = document.createElement('span'); type.className = 'file-type'; type.textContent = item.directory ? 'FOLDER' : (item.name.split('.').pop() || 'FILE').toUpperCase();
+    const date = document.createElement('span'); date.className = 'file-date'; date.textContent = humanDate(item.modified);
+    const size = document.createElement('span'); size.className = 'file-size'; size.textContent = item.directory ? '—' : humanSize(item.size);
     row.append(name, type, date, size);
+    row.addEventListener('click', () => {
+      document.querySelectorAll('.file-row').forEach(el => el.classList.remove('focused'));
+      row.classList.add('focused'); selectedItem = item;
+    });
     row.addEventListener('dblclick', async () => {
-      if (entry.directory) await navigate(entry.path);
+      if (item.directory) await openVault(item.id);
       else {
-        const error = await window.nexus.openFile(entry.path);
-        if (error) alert(error);
+        const result = await window.nexus.openFile(item.id);
+        if (result.error) alert(result.error);
       }
     });
-    row.addEventListener('click', () => {
-      document.querySelectorAll('.file-row').forEach(item => item.classList.remove('focused'));
-      row.classList.add('focused');
-    });
     list.append(row);
-  });
+  }
 }
-async function navigate(folder, addHistory = true) {
-  const result = await window.nexus.navigate(folder);
-  renderFolder(result, addHistory);
+async function createVault() {
+  const password = $('new-password').value, confirmPassword = $('confirm-password').value;
+  if (password.length < 10) { $('create-error').textContent = 'Use at least 10 characters.'; return; }
+  if (password !== confirmPassword) { $('create-error').textContent = 'The passwords do not match.'; return; }
+  $('create-vault-button').disabled = true;
+  const result = await window.nexus.createVault({ parentPath: window.selectedVaultParent, password });
+  $('create-vault-button').disabled = false;
+  $('new-password').value = ''; $('confirm-password').value = '';
+  if (result.error) { $('create-error').textContent = result.error; return; }
+  vaultPath = result.folder; await openVault(null);
 }
-function showHome() {
-  $('welcome').classList.remove('hidden');
-  $('quick-access').classList.remove('hidden');
-  $('file-area').classList.add('hidden');
-  $('page-title').textContent = 'Home';
-  $('folder-title').textContent = 'Quick access';
-  $('item-count').textContent = '';
-  $('breadcrumbs').innerHTML = '';
-  setActive('home-button');
-}
-async function showComputer() {
-  const drives = await window.nexus.getDrives();
-  renderDrives(drives);
-  $('welcome').classList.add('hidden');
-  $('quick-access').classList.remove('hidden');
-  $('file-area').classList.add('hidden');
-  $('page-title').textContent = 'This PC';
-  $('folder-title').textContent = 'Available drives';
-  $('item-count').textContent = drives.length + ' drives';
-  $('usb-card').classList.add('hidden');
-  $('computer-card').classList.add('hidden');
-  $('breadcrumbs').innerHTML = '<span class="crumb current">This PC</span>';
-  setActive('all-files-button');
-  const grid = $('quick-access');
-  grid.innerHTML = '';
-  drives.forEach(drive => {
-    const card = document.createElement('button');
-    card.className = 'quick-card';
-    card.innerHTML = '<span class="quick-symbol pc-symbol">▣</span><b></b><small>Open drive</small>';
-    card.querySelector('b').textContent = drive.name;
-    card.addEventListener('click', () => navigate(drive.path));
-    grid.append(card);
-  });
-}
-$('home-button').addEventListener('click', showHome);
-$('all-files-button').addEventListener('click', showComputer);
-$('usb-card').addEventListener('click', () => navigate(current?.path || ''));
-$('computer-card').addEventListener('click', showComputer);
-$('browse-button').addEventListener('click', async () => {
-  const result = await window.nexus.chooseFolder();
-  if (!result.canceled) renderFolder(result);
+$('unlock-button').addEventListener('click', unlock);
+$('unlock-password').addEventListener('keydown', event => { if (event.key === 'Enter') unlock(); });
+$('locate-button').addEventListener('click', async () => {
+  const result = await window.nexus.locateVault();
+  if (result.error) { alert(result.error); return; }
+  if (!result.canceled) { vaultPath = result.vaultPath; showUnlock(); }
 });
-$('open-folder').addEventListener('click', async () => {
-  const result = await window.nexus.chooseFolder();
-  if (!result.canceled) renderFolder(result);
+$('create-button').addEventListener('click', async () => {
+  const result = await window.nexus.chooseLocation();
+  if (result.canceled) return;
+  window.selectedVaultParent = result.path;
+  $('selected-location').textContent = 'Vault will be created in: ' + result.path + '\\NEXUS_VAULT';
+  $('no-vault-panel').classList.add('hidden'); $('create-panel').classList.remove('hidden');
 });
-$('up-button').addEventListener('click', () => { if (current?.parent) navigate(current.parent); });
-$('back-button').addEventListener('click', async () => {
-  if (historyIndex > 0) {
-    historyIndex--;
-    const result = await window.nexus.navigate(history[historyIndex]);
-    renderFolder(result, false);
+$('create-vault-button').addEventListener('click', createVault);
+$('lock-button').addEventListener('click', async () => {
+  await window.nexus.lock();
+  if (vaultPath) showUnlock(); else showNoVault();
+});
+$('vault-home').addEventListener('click', () => openVault(null));
+$('up-button').addEventListener('click', async () => {
+  const data = await window.nexus.list(currentFolderId);
+  if (data.breadcrumbs.length) await openVault(data.breadcrumbs.length > 1 ? data.breadcrumbs[data.breadcrumbs.length - 2].id : null);
+});
+$('refresh-button').addEventListener('click', refreshFolder);
+$('search').addEventListener('input', () => drawEntries(currentEntries.filter(item => item.name.toLowerCase().includes($('search').value.toLowerCase()))));
+$('import-button').addEventListener('click', async () => {
+  const result = await window.nexus.importItems(currentFolderId);
+  if (result.error) { alert(result.error); return; }
+  if (result.canceled) return;
+  await refreshFolder();
+  alert('Encrypted import complete: ' + result.files + ' files and ' + result.folders + ' folders. Original source copies have NOT been deleted.');
+});
+$('new-folder-button').addEventListener('click', async () => {
+  const name = prompt('New folder name:');
+  if (!name) return;
+  const result = await window.nexus.newFolder(name, currentFolderId);
+  if (result.error) alert(result.error); else await refreshFolder();
+});
+$('file-list').addEventListener('contextmenu', event => {
+  const row = event.target.closest('.file-row'); if (!row) return;
+  event.preventDefault(); row.click(); if (!selectedItem) return;
+  const action = prompt('Type: rename, export, or delete');
+  if (!action) return;
+  if (action.toLowerCase() === 'rename') {
+    const name = prompt('New name:', selectedItem.name);
+    if (name) window.nexus.rename(selectedItem.id, name, selectedItem.directory).then(result => result.error ? alert(result.error) : refreshFolder());
+  } else if (action.toLowerCase() === 'export' && !selectedItem.directory) {
+    window.nexus.exportFile(selectedItem.id).then(result => { if (result.error) alert(result.error); });
+  } else if (action.toLowerCase() === 'delete') {
+    if (confirm('Delete ' + selectedItem.name + ' from the encrypted vault? This cannot be undone.')) {
+      window.nexus.deleteItem(selectedItem.id, selectedItem.directory).then(result => result.error ? alert(result.error) : refreshFolder());
+    }
   }
 });
-$('refresh-button').addEventListener('click', () => { if (current) navigate(current.path, false); });
-$('search').addEventListener('input', event => {
-  if (!current) return;
-  const query = event.target.value.toLowerCase();
-  drawEntries(current.entries.filter(entry => entry.name.toLowerCase().includes(query)));
+$('auto-launch-button').addEventListener('click', async () => {
+  const state = await window.nexus.initial();
+  const result = await window.nexus.autoLaunch(!state.autoLaunch);
+  if (result.error) { alert(result.error); return; }
+  const enabled = !state.autoLaunch;
+  $('auto-launch-status').textContent = enabled ? 'Enabled on this PC' : 'This PC only · setup required';
+  $('auto-launch-button').textContent = enabled ? 'Disable USB auto-launch' : 'Enable USB auto-launch';
+  if (enabled) alert('USB auto-launch is enabled for this Windows account. A small watcher starts at sign-in and opens the password screen when it detects the vault USB. This setup applies only to this PC.');
 });
-(async () => {
-  const data = await window.nexus.initial();
-  renderFolder(data);
-  showHome();
-})();
+window.nexus.onForceLock(() => {
+  vaultPath = null;
+  showLock('The USB was removed or the device suspended. NEXUS has locked the vault.');
+});
+window.addEventListener('beforeunload', () => { window.nexus.lock(); });
+initialize();
