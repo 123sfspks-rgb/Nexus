@@ -174,11 +174,11 @@ async function setupSyncFolders() {
   const current = await window.nexus.syncSources();
   if (current.sources.length) {
     const lines = current.sources.map((source, index) =>
-      (index + 1) + '. ' + source.label + '\\n   ' + source.path
-    ).join('\\n');
+      (index + 1) + '. ' + source.label + '\n   ' + source.path
+    ).join('\n');
     const choice = prompt(
-      'AUTOMATIC PC SYNC\\n\\n' + lines +
-      '\\n\\nType ADD to add more folders, or enter a folder number to stop syncing it. ' +
+      'AUTOMATIC PC SYNC\n\n' + lines +
+      '\n\nType ADD to add more folders, or enter a folder number to stop syncing it. ' +
       'Its already-encrypted files will stay in NEXUS.'
     );
     if (choice === null) return;
