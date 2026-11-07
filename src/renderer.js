@@ -1,7 +1,9 @@
 const { Terminal } = window;
 const { FitAddon } = window;
-let term;
-let fit;
+let term = null;
+let fit = null;
+let offData = null;
+let offExit = null;
 let activeView = 'overview';
 
 const $ = id => document.getElementById(id);
@@ -27,21 +29,22 @@ async function loadSystem() {
   $('file-path').textContent = info.cwd;
 }
 async function startTerminal() {
-  if (term) { fit.fit(); return; }
+  if (term) { fit.fit(); term.focus(); return; }
   term = new Terminal({
     cursorBlink: true, fontFamily: 'Cascadia Code, Consolas, monospace', fontSize: 13,
     theme: { background:'#05090e', foreground:'#d8e8ed', cursor:'#55e6dc',
       selectionBackground:'#23515b', black:'#071018', green:'#55e6a7', cyan:'#55e6dc',
       blue:'#5799ff', yellow:'#e8c779', red:'#ef7c83' },
-    convertEol: false, scrollback: 5000
+    scrollback: 5000
   });
   fit = new FitAddon();
   term.loadAddon(fit);
   term.open($('terminal-root'));
   fit.fit();
   term.onData(data => window.nexus.writeTerminal(data));
-  window.nexus.onTerminalData(data => term.write(data));
-  window.nexus.onTerminalExit(code => term.write('\r\n\x1b[90m[process exited: ' + code + ']\x1b[0m\r\n'));
+  term.onResize(({cols,rows}) => window.nexus.resizeTerminal({cols,rows}));
+  offData = window.nexus.onTerminalData(data => term?.write(data));
+  offExit = window.nexus.onTerminalExit(code => term?.write('\r\n\x1b[90m[process exited: ' + code + ']\x1b[0m\r\n'));
   try {
     const result = await window.nexus.startTerminal();
     $('shell-label').textContent = result.shell.toUpperCase();
@@ -49,12 +52,16 @@ async function startTerminal() {
   } catch (error) {
     term.write('\r\n\x1b[31mUnable to start shell: ' + error.message + '\x1b[0m\r\n');
   }
-  window.addEventListener('resize', () => { if (activeView === 'terminal') { fit.fit(); window.nexus.resizeTerminal(term.cols, term.rows); } });
 }
-term && term.onResize(({cols,rows}) => window.nexus.resizeTerminal({cols,rows}));
+window.addEventListener('resize', () => {
+  if (activeView === 'terminal' && fit && term) fit.fit();
+});
 $('restart-terminal').addEventListener('click', async () => {
   window.nexus.stopTerminal();
-  if (term) { term.dispose(); term = null; fit = null; }
+  if (offData) offData();
+  if (offExit) offExit();
+  if (term) term.dispose();
+  term = null; fit = null; offData = null; offExit = null;
   $('terminal-root').innerHTML = '';
   await startTerminal();
 });
@@ -80,7 +87,9 @@ async function refreshFiles() {
   });
 }
 $('choose-folder').addEventListener('click', async () => {
-  // Folder selection is performed through a native dialog in a later release.
-  alert('To change the working folder for now, use the terminal command: cd "C:\\path\\to\\folder"');
+  const result = await window.nexus.chooseWorkspace();
+  if (result.canceled) return;
+  await loadSystem();
+  await refreshFiles();
 });
 loadSystem();
