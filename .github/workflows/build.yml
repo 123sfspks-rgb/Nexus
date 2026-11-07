@@ -1,0 +1,33 @@
+name: Build NEXUS for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build.yml'
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build portable executable
+        run: npm run dist:win
+      - name: Upload portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXUS-Windows-Portable
+          path: dist/*.exe
+          if-no-files-found: error
