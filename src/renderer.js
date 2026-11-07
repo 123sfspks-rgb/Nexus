@@ -34,8 +34,6 @@ async function initialize() {
   if (state.unlocked) await openVault();
   else if (vaultPath) showUnlock();
   else showNoVault();
-  $('auto-launch-status').textContent = state.autoLaunch ? 'Enabled on this PC' : 'This PC only · setup required';
-  $('auto-launch-button').textContent = state.autoLaunch ? 'Disable USB auto-launch' : 'Enable USB auto-launch';
 }
 async function unlock() {
   const password = $('unlock-password').value;
@@ -172,15 +170,6 @@ $('file-list').addEventListener('contextmenu', event => {
       window.nexus.deleteItem(selectedItem.id, selectedItem.directory).then(result => result.error ? alert(result.error) : refreshFolder());
     }
   }
-});
-$('auto-launch-button').addEventListener('click', async () => {
-  const state = await window.nexus.initial();
-  const result = await window.nexus.autoLaunch(!state.autoLaunch);
-  if (result.error) { alert(result.error); return; }
-  const enabled = !state.autoLaunch;
-  $('auto-launch-status').textContent = enabled ? 'Enabled on this PC' : 'This PC only · setup required';
-  $('auto-launch-button').textContent = enabled ? 'Disable USB auto-launch' : 'Enable USB auto-launch';
-  if (enabled) alert('USB auto-launch is enabled for this Windows account. A small watcher starts at sign-in and opens the password screen when it detects the vault USB. This setup applies only to this PC.');
 });
 window.nexus.onForceLock(() => {
   vaultPath = null;
