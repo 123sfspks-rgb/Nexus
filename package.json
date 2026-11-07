@@ -16,8 +16,18 @@
     "appId": "com.nexus.workspace",
     "productName": "NEXUS",
     "asar": true,
-    "files": ["src/**/*", "package.json"],
-    "win": { "target": ["portable"], "artifactName": "NEXUS-\${version}-Windows-Portable.exe" },
-    "portable": { "artifactName": "NEXUS-\${version}-Windows-Portable.exe" }
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "NEXUS-${version}-Windows-Portable.exe"
+    },
+    "portable": {
+      "artifactName": "NEXUS-${version}-Windows-Portable.exe"
+    }
   }
 }
