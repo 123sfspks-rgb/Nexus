@@ -1,28 +1,45 @@
 # NEXUS
 
-NEXUS is a simple portable Windows desktop file manager. It opens in its own app window — no Chrome, no browser tab, and no terminal.
+NEXUS is a Windows desktop app for a password-protected, encrypted USB vault.
 
-## What it does
-- Browse folders and drives from one interface.
-- Double-click folders to move into them.
-- Use Back and Up to navigate.
-- Double-click files to open them in their normal Windows applications.
-- Search the current folder.
-- Choose any folder using the native Windows folder picker.
-- Browse available drive letters, including a USB drive.
+## Security model
 
-## Windows portable build
-The GitHub Actions workflow builds a portable Windows executable.
+- Files imported into the vault are encrypted individually with AES-256-GCM.
+- The vault index (file names, folder names, and structure) is encrypted too.
+- A password-derived key is created with scrypt. The password is never stored.
+- The vault folder is marked hidden/system on Windows as a convenience. Hidden is not security; encryption is the protection.
+- Wrong passwords do not reveal the file list or file contents.
+- Removing the USB or suspending the PC locks the session.
+- Files opened in another application are decrypted into a temporary session directory and removed when NEXUS locks or exits. This is best-effort cleanup, not a guarantee of secure erasure.
+- Exported files are ordinary plaintext copies. Files in the original source folders also remain plaintext until the user removes those originals.
 
-1. Open the repository's **Actions** tab.
-2. Select **Build NEXUS for Windows**.
-3. Wait for the run to finish successfully.
-4. Open the run and download the **NEXUS-Windows-Portable** artifact.
-5. Copy the executable to your USB drive and double-click it.
+## First use
 
-## Notes
-- Designed for Windows 10/11 64-bit.
-- NEXUS is a file manager, not a replacement for Windows or for the applications that open your files.
-- Files open using the programs already installed on the computer.
-- The app does not upload or sync your files.
-- The portable executable can be stored on a USB drive. Some Electron runtime data may still be stored in the Windows user profile.
+1. Put NEXUS.exe on the USB drive.
+2. Launch it and choose Create encrypted vault.
+3. Select the USB drive or the NEXUS folder on it and set a password of at least 10 characters.
+4. Import existing folders and files into the vault.
+5. Confirm that the encrypted copies are present before deleting old unencrypted source folders.
+6. Keep the password safe. There is no password reset or recovery key.
+
+The encrypted vault is stored in a folder named NEXUS_VAULT on the selected drive. The folder is hidden on Windows, but its contents remain encrypted even if someone reveals it.
+
+## USB auto-launch
+
+Windows blocks applications from automatically running merely because a USB drive was inserted. NEXUS offers an optional, visible per-PC helper:
+
+- Select Enable USB auto-launch inside NEXUS on a Windows PC.
+- NEXUS copies its executable into the current Windows user's AppData folder and creates a Startup shortcut.
+- At sign-in, a small NEXUS tray watcher scans for a NEXUS vault on connected drive letters.
+- When it detects the vault USB, it opens the NEXUS password screen.
+- Disable it using the tray menu or the NEXUS button.
+
+This configuration applies only to that Windows user account and computer. It is not universal across computers and does not bypass Windows USB autorun protections.
+
+## Important limits
+
+- Losing the password means losing access to the encrypted data.
+- Encryption at rest protects the vault while locked. When unlocked, file names and data are available to NEXUS.
+- Opening a file in another app creates a temporary decrypted copy. Do not use this for highly sensitive files on a shared or untrusted PC.
+- Secure deletion cannot be guaranteed on SSDs, flash drives, or wear-levelled storage. Delete old originals only after checking the encrypted import.
+- NEXUS does not automatically encrypt files elsewhere on the USB. Import them into the vault.

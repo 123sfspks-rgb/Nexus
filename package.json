@@ -1,7 +1,7 @@
 {
   "name": "nexus-desktop",
-  "version": "1.1.0",
-  "description": "NEXUS - a simple portable desktop file workspace",
+  "version": "2.0.0",
+  "description": "NEXUS - encrypted USB vault and file manager",
   "main": "src/main.js",
   "license": "MIT",
   "scripts": {
@@ -17,7 +17,7 @@
     "productName": "NEXUS",
     "asar": true,
     "files": ["src/**/*", "package.json"],
-    "win": { "target": ["portable"], "artifactName": "NEXUS-${version}-Windows-Portable.exe" },
-    "portable": { "artifactName": "NEXUS-${version}-Windows-Portable.exe" }
+    "win": { "target": ["portable"], "artifactName": "NEXUS-\${version}-Windows-Portable.exe" },
+    "portable": { "artifactName": "NEXUS-\${version}-Windows-Portable.exe" }
   }
 }
