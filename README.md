@@ -24,17 +24,9 @@ NEXUS is a Windows desktop app for a password-protected, encrypted USB vault.
 
 The encrypted vault is stored in a folder named NEXUS_VAULT on the selected drive. The folder is hidden on Windows, but its contents remain encrypted even if someone reveals it.
 
-## USB auto-launch
+## Auto-run
 
-Windows blocks applications from automatically running merely because a USB drive was inserted. NEXUS offers an optional, visible per-PC helper:
-
-- Select Enable USB auto-launch inside NEXUS on a Windows PC.
-- NEXUS copies its executable into the current Windows user's AppData folder and creates a Startup shortcut.
-- At sign-in, a small NEXUS tray watcher scans for a NEXUS vault on connected drive letters.
-- When it detects the vault USB, it opens the NEXUS password screen.
-- Disable it using the tray menu or the NEXUS button.
-
-This configuration applies only to that Windows user account and computer. It is not universal across computers and does not bypass Windows USB autorun protections.
+Configure USB auto-run separately on the Windows PCs you control. NEXUS itself does not install a startup helper.
 
 ## Important limits
 
